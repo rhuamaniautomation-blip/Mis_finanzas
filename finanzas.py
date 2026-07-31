@@ -585,7 +585,11 @@ def calcular_saldo_disponible(db: DatabaseManager, mes: int, anio: int) -> float
 
 def obtener_meses_disponibles() -> List[Tuple[int, int, str]]:
     hoy = datetime.now()
-    return [(hoy + relativedelta(months=i)).month, (hoy + relativedelta(months=i)).year, (hoy + relativedelta(months=i)).strftime('%B %Y') for i in range(-6, 7)]
+    meses = []
+    for i in range(-6, 7):
+        fecha = hoy + relativedelta(months=i)
+        meses.append((fecha.month, fecha.year, fecha.strftime('%B %Y')))
+    return meses
 
 def obtener_nombre_mes(mes: int, anio: int) -> str:
     meses_nombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
