@@ -1,0 +1,14 @@
+# Interfaz web principal
+streamlit>=1.30.0
+
+# Manipulación y análisis de datos
+pandas>=2.0.0
+
+# Visualización de gráficos interactivos
+plotly>=5.18.0
+
+# Manejo avanzado de fechas y tiempos (relativedelta)
+python-dateutil>=2.8.2
+
+# Cliente oficial de Supabase (necesario si usas la versión en la nube)
+supabase>=2.3.0
