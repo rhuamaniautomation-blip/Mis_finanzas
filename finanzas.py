@@ -315,16 +315,16 @@ class DatabaseManager:
                     {'nombre': 'Vivienda', 'tipo': 'fijo', 'color': '#0d6efd', 'icono': '🏠'},
                     {'nombre': 'Alimentación', 'tipo': 'variable', 'color': '#fd7e14', 'icono': '🍔'},
                     {'nombre': 'Transporte', 'tipo': 'variable', 'color': '#198754', 'icono': '🚗'},
-                    {'nombre': 'Servicios', 'tipo': 'fijo', 'color': '#dc3545', 'icono': '💡'},
-                    {'nombre': 'Salud', 'tipo': 'variable', 'color': '#6f42c1', 'icono': ''},
-                    {'nombre': 'Educación', 'tipo': 'variable', 'color': '#795548', 'icono': ''},
-                    {'nombre': 'Entretenimiento', 'tipo': 'variable', 'color': '#e83e8c', 'icono': ''},
+                    {'nombre': 'Servicios', 'tipo': 'fijo', 'color': '#dc3545', 'icono': ''},
+                    {'nombre': 'Salud', 'tipo': 'variable', 'color': '#6f42c1', 'icono': '🏥'},
+                    {'nombre': 'Educación', 'tipo': 'variable', 'color': '#795548', 'icono': '📚'},
+                    {'nombre': 'Entretenimiento', 'tipo': 'variable', 'color': '#e83e8c', 'icono': '🎬'},
                     {'nombre': 'Ropa', 'tipo': 'variable', 'color': '#6c757d', 'icono': '👕'},
                     {'nombre': 'Seguros', 'tipo': 'fijo', 'color': '#ffc107', 'icono': '🛡️'},
                     {'nombre': 'Internet y Teléfono', 'tipo': 'fijo', 'color': '#0dcaf0', 'icono': '📱'},
-                    {'nombre': 'Tarjetas de Crédito', 'tipo': 'fijo', 'color': '#fd7e14', 'icono': ''},
+                    {'nombre': 'Tarjetas de Crédito', 'tipo': 'fijo', 'color': '#fd7e14', 'icono': '💳'},
                     {'nombre': 'Impuestos SUNAT', 'tipo': 'fijo', 'color': '#6f42c1', 'icono': '📋'},
-                    {'nombre': 'AFP/ONP', 'tipo': 'fijo', 'color': '#20c997', 'icono': '🏦'},
+                    {'nombre': 'AFP/ONP', 'tipo': 'fijo', 'color': '#20c997', 'icono': ''},
                     {'nombre': 'Otros', 'tipo': 'variable', 'color': '#495057', 'icono': '📦'}
                 ]
                 self.client.table('categorias').insert(categorias_default).execute()
@@ -389,7 +389,7 @@ class DatabaseManager:
                 'nombre, color, icono'
             ).eq('id', r['categoria_id']).execute()
             cat = cat_response.data[0] if cat_response.data else {
-                'nombre': 'Sin categoría', 'color': '#607d8b', 'icono': ''
+                'nombre': 'Sin categoría', 'color': '#607d8b', 'icono': '📦'
             }
             result.append({
                 'id': r['id'], 'nombre': safe_str(r['nombre']),
@@ -517,18 +517,6 @@ class DatabaseManager:
             'fecha_pago': int(fecha_pago), 'frecuencia': frecuencia, 'activo': 1
         }).select('id').execute()
         return response.data[0]['id'] if response.data else 0
-
-    def actualizar_gasto_fijo(self, id: int, nombre: str, monto: float,
-                              categoria_id: int, fecha_pago: int,
-                              frecuencia: str) -> bool:
-        try:
-            self.client.table('gastos_fijos').update({
-                'nombre': nombre, 'monto': float(monto), 'categoria_id': int(categoria_id),
-                'fecha_pago': int(fecha_pago), 'frecuencia': frecuencia
-            }).eq('id', int(id)).execute()
-            return True
-        except Exception:
-            return False
 
     def eliminar_gasto_fijo(self, id: int) -> bool:
         response = self.client.table('gastos_fijos').update({'activo': 0}).eq('id', int(id)).execute()
@@ -827,20 +815,33 @@ class DatabaseManager:
 
 
 # ============================================================
-# FUNCIONES AUXILIARES DE CÁLCULO
+# FUNCIONES AUXILIARES - CÁLCULOS FINANCIEROS
 # ============================================================
 def formatear_moneda(monto: float) -> str:
     return f"S/ {monto:,.2f}"
 
 
 def calcular_total_ingresos(db: DatabaseManager, mes: int, anio: int) -> float:
+    """Calcula el TOTAL de ingresos del mes (recibidos + pendientes)"""
     ingresos = db.obtener_ingresos_mensuales(mes, anio)
     return sum(float(i['monto']) for i in ingresos)
+
+
+def calcular_total_ingresos_recibidos(db: DatabaseManager, mes: int, anio: int) -> float:
+    """Calcula SOLO los ingresos ya recibidos"""
+    ingresos = db.obtener_ingresos_mensuales(mes, anio)
+    return sum(float(i['monto']) for i in ingresos if i['recibido'])
 
 
 def calcular_total_gastos_fijos(db: DatabaseManager, mes: int, anio: int) -> float:
     gastos = db.obtener_gastos_fijos_mensuales(mes, anio)
     return sum(float(g['monto']) for g in gastos)
+
+
+def calcular_total_gastos_fijos_pagados(db: DatabaseManager, mes: int, anio: int) -> float:
+    """Calcula SOLO los gastos fijos ya pagados"""
+    gastos = db.obtener_gastos_fijos_mensuales(mes, anio)
+    return sum(float(g['monto']) for g in gastos if g['pagado'])
 
 
 def calcular_total_gastos_variables(db: DatabaseManager, mes: int, anio: int) -> float:
@@ -864,7 +865,11 @@ def calcular_total_aportes_metas_mes(db: DatabaseManager, mes: int, anio: int) -
     return sum(db.obtener_aportes_meta_mes(m['id'], mes, anio) for m in metas)
 
 
-def calcular_saldo_disponible(db: DatabaseManager, mes: int, anio: int) -> float:
+def calcular_saldo_proyectado(db: DatabaseManager, mes: int, anio: int) -> float:
+    """
+    SALDO PROYECTADO: Considera TODOS los ingresos del mes (recibidos + pendientes)
+    Útil para planificación
+    """
     ingresos = calcular_total_ingresos(db, mes, anio)
     egresos = (calcular_total_gastos_fijos(db, mes, anio) +
                calcular_total_gastos_variables(db, mes, anio) +
@@ -872,6 +877,26 @@ def calcular_saldo_disponible(db: DatabaseManager, mes: int, anio: int) -> float
                calcular_total_ahorros_mes(db, mes, anio) +
                calcular_total_aportes_metas_mes(db, mes, anio))
     return ingresos - egresos
+
+
+def calcular_saldo_real_disponible(db: DatabaseManager, mes: int, anio: int) -> float:
+    """
+    SALDO REAL DISPONIBLE: Considera SOLO los ingresos ya recibidos
+    y SOLO los egresos ya ejecutados (gastos fijos pagados + gastos variables + préstamos pagados + ahorros + metas)
+    Este es el dinero REAL que tienes en este momento
+    """
+    ingresos_recibidos = calcular_total_ingresos_recibidos(db, mes, anio)
+    
+    # Solo considerar egresos ya ejecutados
+    gastos_fijos_pagados = calcular_total_gastos_fijos_pagados(db, mes, anio)
+    gastos_variables = calcular_total_gastos_variables(db, mes, anio)
+    prestamos_mes = calcular_total_prestamos_mes(db, mes, anio)
+    ahorros_mes = calcular_total_ahorros_mes(db, mes, anio)
+    metas_mes = calcular_total_aportes_metas_mes(db, mes, anio)
+    
+    egresos_ejecutados = gastos_fijos_pagados + gastos_variables + prestamos_mes + ahorros_mes + metas_mes
+    
+    return ingresos_recibidos - egresos_ejecutados
 
 
 def obtener_meses_disponibles() -> List[Tuple[int, int, str]]:
@@ -888,33 +913,68 @@ def obtener_nombre_mes(mes: int, anio: int) -> str:
         'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
         'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
     ]
-    return f"{meses_nombres[mes-1]} {anio}"
+    try:
+        return f"{meses_nombres[int(mes)-1]} {int(anio)}"
+    except (ValueError, IndexError):
+        return f"Mes {mes} {anio}"
 
 
 def render_saldo_card(db: DatabaseManager, mes: int, anio: int):
-    saldo = calcular_saldo_disponible(db, mes, anio)
-    ingresos = calcular_total_ingresos(db, mes, anio)
-    if ingresos == 0:
-        clase, mensaje = "", "⚠️ Registra tus ingresos para ver el saldo"
-    elif saldo < 0:
-        clase, mensaje = "danger", " Déficit: Estás gastando más de lo que ingresas"
-    elif saldo < ingresos * 0.1:
-        clase, mensaje = "warning", f"⚠️ Saldo bajo: {(saldo/ingresos)*100:.1f}% disponible"
+    """Renderiza las tarjetas de saldo: PROYECTADO y REAL DISPONIBLE"""
+    saldo_proyectado = calcular_saldo_proyectado(db, mes, anio)
+    saldo_real = calcular_saldo_real_disponible(db, mes, anio)
+    ingresos_totales = calcular_total_ingresos(db, mes, anio)
+    ingresos_recibidos = calcular_total_ingresos_recibidos(db, mes, anio)
+    
+    # Tarjeta de Saldo Real Disponible (la más importante)
+    if ingresos_recibidos == 0:
+        clase_real, mensaje_real = "", "⚠️ Aún no has registrado ingresos recibidos"
+    elif saldo_real < 0:
+        clase_real, mensaje_real = "danger", f" Déficit real: Has gastado más de lo recibido"
+    elif saldo_real < ingresos_recibidos * 0.1:
+        clase_real, mensaje_real = "warning", f"️ Saldo real bajo: {(saldo_real/ingresos_recibidos)*100:.1f}% de lo recibido"
     else:
-        clase, mensaje = "", f"✅ Saludable: {(saldo/ingresos)*100:.1f}% disponible"
+        clase_real, mensaje_real = "", f"✅ Dinero real disponible en este momento"
+
     st.markdown(f"""
-    <div class="saldo-card {clase}">
-        <div class="saldo-label">💵 Saldo Disponible - {obtener_nombre_mes(mes, anio)}</div>
-        <div class="saldo-amount">{formatear_moneda(saldo)}</div>
-        <div style="font-size: 0.95rem; opacity: 0.95;">{mensaje}</div>
+    <div class="saldo-card {clase_real}">
+        <div class="saldo-label">💰 Saldo REAL Disponible - {obtener_nombre_mes(mes, anio)}</div>
+        <div class="saldo-amount">{formatear_moneda(saldo_real)}</div>
+        <div style="font-size: 0.95rem; opacity: 0.95;">{mensaje_real}</div>
+        <div style="font-size: 0.85rem; opacity: 0.9; margin-top: 0.5rem;">
+            💵 Ingresos recibidos: {formatear_moneda(ingresos_recibidos)} de {formatear_moneda(ingresos_totales)}
+        </div>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Tarjeta de Saldo Proyectado (informativa)
+    if ingresos_totales > 0:
+        porcentaje_recibido = (ingresos_recibidos / ingresos_totales) * 100
+        if saldo_proyectado < 0:
+            clase_proj = "danger"
+        elif saldo_proyectado < ingresos_totales * 0.1:
+            clase_proj = "warning"
+        else:
+            clase_proj = "info"
+        
+        st.markdown(f"""
+        <div class="saldo-card {clase_proj}" style="opacity: 0.85;">
+            <div class="saldo-label">📊 Saldo PROYECTADO (Planificación) - {obtener_nombre_mes(mes, anio)}</div>
+            <div class="saldo-amount">{formatear_moneda(saldo_proyectado)}</div>
+            <div style="font-size: 0.95rem; opacity: 0.95;">
+                Si recibes todos los ingresos pendientes: {formatear_moneda(ingresos_totales - ingresos_recibidos)}
+            </div>
+            <div style="font-size: 0.85rem; opacity: 0.9; margin-top: 0.5rem;">
+                📈 {porcentaje_recibido:.1f}% de ingresos ya recibidos
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 def render_footer():
     st.markdown("""
     <div class="footer-designer">
-        <div class="brand">🤖 CAVA</div>
+        <div class="brand"> CAVA</div>
         <h4>Especialistas en Robótica y Automatización</h4>
         <p>Diseñado y desarrollado por <strong>Roger Huamani</strong></p>
         <p style="font-size: 0.8rem; opacity: 0.8; margin-top: 0.5rem;">© 2026 - Todos los derechos reservados</p>
@@ -927,7 +987,7 @@ def render_footer():
 # ============================================================
 def login():
     st.title("🔐 Iniciar Sesión")
-    st.markdown("### Gestor Financiero Personal - Perú 🇵🇪")
+    st.markdown("### Gestor Financiero Personal - Perú 🇵")
     with st.form("login_form"):
         username = st.text_input("Usuario")
         password = st.text_input("Contraseña", type="password")
@@ -1035,13 +1095,13 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
         """, unsafe_allow_html=True)
     
     with col5:
-        saldo = calcular_saldo_disponible(db, mes, anio)
-        color_saldo = "#198754" if saldo >= 0 else "#dc3545"
+        saldo_real = calcular_saldo_real_disponible(db, mes, anio)
+        color_saldo = "#198754" if saldo_real >= 0 else "#dc3545"
         st.markdown(f"""
         <div class="metric-card" style="border-left: 5px solid {color_saldo};">
-            <div style="font-size: 0.85rem; color: #6c757d; text-transform: uppercase;">💰 Saldo</div>
-            <div style="font-size: 1.3rem; font-weight: 600; color: {color_saldo};">{formatear_moneda(saldo)}</div>
-            <div style="font-size: 0.75rem; color: #6c757d;">Disponible</div>
+            <div style="font-size: 0.85rem; color: #6c757d; text-transform: uppercase;">💰 Saldo Real</div>
+            <div style="font-size: 1.3rem; font-weight: 600; color: {color_saldo};">{formatear_moneda(saldo_real)}</div>
+            <div style="font-size: 0.75rem; color: #6c757d;">Disponible ahora</div>
         </div>
         """, unsafe_allow_html=True)
     
@@ -1049,16 +1109,16 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
     
     col1, col2 = st.columns(2)
     with col1:
-        st.subheader(" Distribución del Ingreso")
+        st.subheader("📊 Distribución del Ingreso")
         if total_ingresos > 0:
-            saldo = calcular_saldo_disponible(db, mes, anio)
+            saldo_proyectado = calcular_saldo_proyectado(db, mes, anio)
             data = pd.DataFrame([
                 {'Concepto': 'Gastos Fijos', 'Monto': total_gastos_fijos},
                 {'Concepto': 'Gastos Variables', 'Monto': total_gastos_variables},
                 {'Concepto': 'Préstamos', 'Monto': total_prestamos_mes},
                 {'Concepto': 'Ahorros', 'Monto': total_ahorros},
                 {'Concepto': 'Metas', 'Monto': total_aportes_metas},
-                {'Concepto': 'Disponible', 'Monto': max(saldo, 0)}
+                {'Concepto': 'Disponible', 'Monto': max(saldo_proyectado, 0)}
             ])
             data = data[data['Monto'] > 0]
             if not data.empty:
@@ -1093,11 +1153,11 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
             fig.update_layout(barmode='group', height=400, xaxis_tickangle=-45)
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info(" Define presupuestos en '📊 Presupuestos'")
+            st.info("💡 Define presupuestos en '📊 Presupuestos'")
     
     if metas:
         st.markdown("---")
-        st.subheader("🎯 Metas Financieras")
+        st.subheader(" Metas Financieras")
         cols = st.columns(min(len(metas), 3))
         for idx, meta in enumerate(metas[:6]):
             with cols[idx % len(cols)]:
@@ -1146,7 +1206,7 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
         st.markdown("#### 💸 Gastos Fijos del Mes")
         if gastos_fijos:
             for gasto in gastos_fijos:
-                estado = "✅" if gasto['pagado'] else ""
+                estado = "✅" if gasto['pagado'] else "⏳"
                 st.markdown(f"""
                 <div class="{'paid-expense' if gasto['pagado'] else 'pending-expense'}">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1169,11 +1229,11 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
 
 
 # ============================================================
-# PÁGINA: INGRESOS
+# PÁGINA: INGRESOS (CON SALDO REAL)
 # ============================================================
 def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
     st.title("💵 Gestión de Ingresos")
-    tab1, tab2, tab3 = st.tabs(["📝 Ingresos del Mes", "⚙️ Configurar Ingresos", " Copiar a Otro Mes"])
+    tab1, tab2, tab3 = st.tabs([" Ingresos del Mes", "⚙️ Configurar Ingresos", "📋 Copiar a Otro Mes"])
     
     with tab1:
         st.subheader(f"Ingresos - {obtener_nombre_mes(mes, anio)}")
@@ -1182,20 +1242,35 @@ def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
             total = sum(float(i['monto']) for i in ingresos)
             recibidos = sum(float(i['monto']) for i in ingresos if i['recibido'])
             pendientes = total - recibidos
+            
+            # Calcular saldo REAL disponible (solo con lo recibido)
+            saldo_real = calcular_saldo_real_disponible(db, mes, anio)
+            saldo_proyectado = calcular_saldo_proyectado(db, mes, anio)
+            
             col1, col2, col3 = st.columns(3)
             col1.metric("Total Ingresos", formatear_moneda(total))
             col2.metric("Recibidos", formatear_moneda(recibidos))
             col3.metric("Pendientes", formatear_moneda(pendientes))
-            saldo = calcular_saldo_disponible(db, mes, anio)
-            if saldo >= 0:
-                st.success(f"💰 **Saldo disponible:** {formatear_moneda(saldo)}")
-            else:
-                st.error(f"🚨 **Déficit:** {formatear_moneda(abs(saldo))}")
+            
+            # Mostrar ambos saldos claramente
+            st.markdown("---")
+            col_s1, col_s2 = st.columns(2)
+            with col_s1:
+                if saldo_real >= 0:
+                    st.success(f"💰 **Saldo REAL disponible:** {formatear_moneda(saldo_real)}\n\n*(Basado solo en ingresos recibidos: {formatear_moneda(recibidos)})*")
+                else:
+                    st.error(f"🚨 **Déficit REAL:** {formatear_moneda(abs(saldo_real))}\n\n*(Has gastado más de lo recibido)*")
+            with col_s2:
+                if saldo_proyectado >= 0:
+                    st.info(f"📊 **Saldo PROYECTADO:** {formatear_moneda(saldo_proyectado)}\n\n*(Si recibes todos los ingresos pendientes)*")
+                else:
+                    st.warning(f"⚠️ **Proyección negativa:** {formatear_moneda(abs(saldo_proyectado))}")
+            
             st.markdown("---")
             for ingreso in ingresos:
                 col1, col2, col3, col4, col5 = st.columns([3, 2, 2, 2, 1])
                 with col1:
-                    estado = "✅ Recibido" if ingreso['recibido'] else "⏳ Pendiente"
+                    estado = "✅ Recibido" if ingreso['recibido'] else " Pendiente"
                     st.markdown(f"**{ingreso['icono'] or ''} {ingreso['nombre']}**")
                     st.caption(estado)
                 with col2:
@@ -1243,6 +1318,7 @@ def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
                         db.crear_registro_ingreso_mensual(ingreso_id, mes, anio, monto)
                         st.success("¡Ingreso agregado!")
                         st.rerun()
+        
         st.markdown("---")
         st.subheader("Ingresos Configurados")
         ingresos_config = db.obtener_ingresos()
@@ -1255,7 +1331,7 @@ def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
                         st.markdown(f"**Día de pago:** {ingreso['fecha_pago']}")
                         st.markdown(f"**Frecuencia:** {ingreso['frecuencia']}")
                     with col2:
-                        if st.button("🗑️ Eliminar", key=f"del_ing_{ingreso['id']}"):
+                        if st.button("️ Eliminar", key=f"del_ing_{ingreso['id']}"):
                             db.eliminar_ingreso(ingreso['id'])
                             st.rerun()
         else:
@@ -1277,15 +1353,16 @@ def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
                 copias = db.copiar_ingresos_a_mes(mes_origen, anio_origen, mes_destino, anio_destino)
                 st.success(f"¡Se copiaron {copias} ingresos!")
                 st.rerun()
+    
     render_footer()
 
 
 # ============================================================
-# PÁGINA: GASTOS FIJOS (CON EDICIÓN)
+# PÁGINA: GASTOS FIJOS
 # ============================================================
 def pagina_gastos_fijos(db: DatabaseManager, mes: int, anio: int):
     st.title("💳 Gestión de Gastos Fijos")
-    tab1, tab2, tab3 = st.tabs(["📝 Gastos del Mes", "⚙️ Configurar Gastos", "📋 Copiar a Otro Mes"])
+    tab1, tab2, tab3 = st.tabs(["📝 Gastos del Mes", "⚙️ Configurar Gastos", " Copiar a Otro Mes"])
     
     with tab1:
         st.subheader(f"Gastos Fijos - {obtener_nombre_mes(mes, anio)}")
@@ -1348,65 +1425,22 @@ def pagina_gastos_fijos(db: DatabaseManager, mes: int, anio: int):
                         db.crear_registro_gasto_fijo_mensual(gasto_id, mes, anio, monto)
                         st.success("¡Gasto fijo agregado!")
                         st.rerun()
+        
         st.markdown("---")
         st.subheader("Gastos Fijos Configurados")
         gastos_fijos_config = db.obtener_gastos_fijos()
         if gastos_fijos_config:
             for gasto in gastos_fijos_config:
                 with st.expander(f"{gasto['icono'] or ''} {gasto['nombre']} - {formatear_moneda(gasto['monto'])}"):
-                    col1, col2, col3 = st.columns([2, 2, 1])
+                    col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"**Categoría:** {gasto['categoria_nombre']}")
                         st.markdown(f"**Día de pago:** {gasto['fecha_pago']}")
                         st.markdown(f"**Frecuencia:** {gasto['frecuencia']}")
                     with col2:
-                        st.markdown(f"**Monto:** {formatear_moneda(gasto['monto'])}")
-                    with col3:
-                        if st.button("✏️ Editar", key=f"edit_gf_{gasto['id']}"):
-                            st.session_state[f"edit_gasto_fijo_{gasto['id']}"] = True
-                        if st.button("🗑️", key=f"del_gf_{gasto['id']}"):
+                        if st.button("️ Eliminar", key=f"del_gf_{gasto['id']}"):
                             db.eliminar_gasto_fijo(gasto['id'])
                             st.rerun()
-                    # Formulario de edición inline
-                    if st.session_state.get(f"edit_gasto_fijo_{gasto['id']}", False):
-                        st.markdown("#### ✏️ Editar Gasto Fijo")
-                        with st.form(f"form_edit_gf_{gasto['id']}"):
-                            e_nombre = st.text_input("Nombre", value=gasto['nombre'], key=f"e_nombre_{gasto['id']}")
-                            e_monto = st.number_input("Monto (S/)",
-                                                      min_value=0.0,
-                                                      step=0.01,
-                                                      value=float(gasto['monto']),
-                                                      format="%.2f",
-                                                      key=f"e_monto_{gasto['id']}")
-                            e_fecha = st.number_input("Día de pago",
-                                                      min_value=1,
-                                                      max_value=31,
-                                                      value=int(gasto['fecha_pago']),
-                                                      key=f"e_fecha_{gasto['id']}")
-                            categorias = db.obtener_categorias('fijo')
-                            if categorias:
-                                cat_opts = {f"{c['icono']} {c['nombre']}": c['id'] for c in categorias}
-                                cat_idx = list(cat_opts.values()).index(gasto['categoria_id']) if gasto['categoria_id'] in cat_opts.values() else 0
-                                e_cat_nombre = st.selectbox("Categoría", list(cat_opts.keys()), index=cat_idx, key=f"e_cat_{gasto['id']}")
-                                e_cat_id = cat_opts[e_cat_nombre]
-                            else:
-                                e_cat_id = gasto['categoria_id']
-                            e_frec = st.selectbox("Frecuencia",
-                                                  ["mensual", "anual", "trimestral"],
-                                                  index=["mensual", "anual", "trimestral"].index(gasto['frecuencia']) if gasto['frecuencia'] in ["mensual", "anual", "trimestral"] else 0,
-                                                  key=f"e_frec_{gasto['id']}")
-                            col_b1, col_b2 = st.columns(2)
-                            with col_b1:
-                                if st.form_submit_button("💾 Guardar"):
-                                    if e_nombre and e_monto > 0 and e_cat_id:
-                                        if db.actualizar_gasto_fijo(gasto['id'], e_nombre, e_monto, e_cat_id, int(e_fecha), e_frec):
-                                            st.success("¡Gasto actualizado!")
-                                            st.session_state[f"edit_gasto_fijo_{gasto['id']}"] = False
-                                            st.rerun()
-                            with col_b2:
-                                if st.form_submit_button("❌ Cancelar"):
-                                    st.session_state[f"edit_gasto_fijo_{gasto['id']}"] = False
-                                    st.rerun()
         else:
             st.info("No hay gastos fijos configurados")
     
@@ -1419,31 +1453,46 @@ def pagina_gastos_fijos(db: DatabaseManager, mes: int, anio: int):
         with col2:
             mes_destino = st.selectbox("Mes Destino", range(1, 13), index=mes-1, key="mes_dest_gf")
             anio_destino = st.number_input("Año Destino", value=anio, key="anio_dest_gf")
-        if st.button(" Copiar"):
+        if st.button("📋 Copiar"):
             if mes_origen == mes_destino and anio_origen == anio_destino:
                 st.error("Deben ser diferentes")
             else:
                 copias = db.copiar_gastos_fijos_a_mes(mes_origen, anio_origen, mes_destino, anio_destino)
                 st.success(f"¡Se copiaron {copias} gastos fijos!")
                 st.rerun()
+    
     render_footer()
 
 
 # ============================================================
-# PÁGINA: GASTOS VARIABLES
+# PÁGINA: GASTOS VARIABLES (FORMULARIO AMPLIADO)
 # ============================================================
 def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
     st.title("🛒 Gestión de Gastos Variables")
-    col1, col2 = st.columns([2, 1])
-    with col1:
+    
+    # Usar tabs para separar la lista del formulario - AMBAS VISTAS AMPLIAS
+    tab1, tab2 = st.tabs(["📋 Lista de Gastos Variables", "➕ Agregar Nuevo Gasto Variable"])
+    
+    with tab1:
         st.subheader(f"Gastos Variables - {obtener_nombre_mes(mes, anio)}")
         gastos_variables = db.obtener_gastos_variables(mes, anio)
+        
         if gastos_variables and len(gastos_variables) > 0:
             total = sum(float(g['monto']) for g in gastos_variables)
             st.metric("Total Gastos Variables", formatear_moneda(total))
+            
+            # Saldo real disponible
+            saldo_real = calcular_saldo_real_disponible(db, mes, anio)
+            if saldo_real >= 0:
+                st.success(f"💰 **Saldo real disponible:** {formatear_moneda(saldo_real)}")
+            else:
+                st.error(f"🚨 **Déficit:** {formatear_moneda(abs(saldo_real))}")
+            
             st.markdown("---")
+            
+            # Mostrar gastos en tabla amplia
             for gasto in gastos_variables:
-                col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+                col1, col2, col3, col4 = st.columns([4, 2, 2, 1])
                 with col1:
                     st.markdown(f"**{gasto['icono'] or ''} {gasto['descripcion']}**")
                     try:
@@ -1456,141 +1505,153 @@ def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
                 with col3:
                     st.markdown(f"**{formatear_moneda(gasto['monto'])}**")
                 with col4:
-                    if st.button("️", key=f"del_gv_{gasto['id']}"):
+                    if st.button("🗑️", key=f"del_gv_{gasto['id']}"):
                         db.eliminar_gasto_variable(gasto['id'])
                         st.rerun()
-            saldo = calcular_saldo_disponible(db, mes, anio)
-            st.info(f"💰 Saldo restante: **{formatear_moneda(saldo)}**")
+            
+            st.markdown("---")
+            st.subheader("📊 Distribución por Categoría")
+            gastos_por_categoria = {}
+            for gasto in gastos_variables:
+                cat = gasto['categoria_nombre'] or 'Sin categoría'
+                gastos_por_categoria[cat] = gastos_por_categoria.get(cat, 0) + float(gasto['monto'])
+            df = pd.DataFrame([{'Categoría': k, 'Monto': v} for k, v in gastos_por_categoria.items()])
+            fig = px.pie(df, values='Monto', names='Categoría', hole=0.4)
+            fig.update_layout(height=400)
+            st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("No hay gastos variables registrados.")
-    with col2:
-        st.subheader("Agregar Gasto Variable")
-        with st.form("nuevo_gasto_variable"):
-            descripcion = st.text_input("Descripción")
-            monto = st.number_input("Monto (S/)", min_value=0.0, step=0.01, format="%.2f")
-            categorias = db.obtener_categorias('variable')
-            if categorias:
-                categoria_options = {f"{c['icono']} {c['nombre']}": c['id'] for c in categorias}
-                categoria_nombre = st.selectbox("Categoría", list(categoria_options.keys()))
-                categoria_id = categoria_options[categoria_nombre]
-            else:
-                categoria_id = None
-            fecha = st.date_input("Fecha", value=datetime.now())
-            submit = st.form_submit_button("Agregar Gasto")
+            st.info("No hay gastos variables registrados para este mes.")
+            st.markdown("### 💡 ¿Cómo empezar?")
+            st.markdown("Ve a la pestaña **' Agregar Nuevo Gasto Variable'** para registrar tu primer gasto.")
+    
+    with tab2:
+        st.subheader("➕ Agregar Nuevo Gasto Variable")
+        st.markdown("Registra un gasto variable como alimentación, transporte, entretenimiento, etc.")
+        st.markdown("---")
+        
+        # Formulario en vista completa (no en columna estrecha)
+        with st.form("nuevo_gasto_variable", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                descripcion = st.text_input("📝 Descripción del gasto", placeholder="Ej: Almuerzo, Taxi, Cine...")
+                monto = st.number_input(" Monto (S/)", min_value=0.0, step=0.01, format="%.2f", 
+                                       help="Ingresa el monto en soles")
+            with col2:
+                categorias = db.obtener_categorias('variable')
+                if categorias:
+                    categoria_options = {f"{c['icono']} {c['nombre']}": c['id'] for c in categorias}
+                    categoria_nombre = st.selectbox("📂 Categoría", list(categoria_options.keys()))
+                    categoria_id = categoria_options[categoria_nombre]
+                else:
+                    categoria_id = None
+                    st.warning("No hay categorías variables disponibles")
+                fecha = st.date_input(" Fecha", value=datetime.now())
+            
+            st.markdown("---")
+            submit = st.form_submit_button("✅ Agregar Gasto Variable", use_container_width=True)
             if submit:
                 if descripcion and monto > 0 and categoria_id:
                     db.agregar_gasto_variable(descripcion, monto, categoria_id, fecha.isoformat())
-                    st.success("¡Gasto variable agregado!")
+                    st.success("¡Gasto variable agregado exitosamente!")
                     st.rerun()
-    st.markdown("---")
-    st.subheader("📊 Distribución")
-    if gastos_variables and len(gastos_variables) > 0:
-        gastos_por_categoria = {}
-        for gasto in gastos_variables:
-            cat = gasto['categoria_nombre'] or 'Sin categoría'
-            gastos_por_categoria[cat] = gastos_por_categoria.get(cat, 0) + float(gasto['monto'])
-        df = pd.DataFrame([{'Categoría': k, 'Monto': v} for k, v in gastos_por_categoria.items()])
-        fig = px.pie(df, values='Monto', names='Categoría', hole=0.4)
-        fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.error("Por favor completa todos los campos correctamente")
+        
+        st.markdown("---")
+        st.info("💡 **Tip:** Los gastos variables se suman automáticamente al cálculo de tu saldo real disponible.")
+    
     render_footer()
 
 
 # ============================================================
-# PÁGINA: PRÉSTAMOS (CORREGIDA)
+# PÁGINA: PRÉSTAMOS
 # ============================================================
 def pagina_prestamos(db: DatabaseManager, mes: int, anio: int):
     st.title("💰 Gestión de Préstamos y Deudas")
+    tab1, tab2 = st.tabs(["📋 Mis Préstamos", "➕ Agregar Préstamo"])
     
-    try:
-        tab1, tab2 = st.tabs(["📋 Mis Préstamos", "➕ Agregar Préstamo"])
-        
-        with tab1:
-            st.subheader("Préstamos Activos")
-            prestamos = db.obtener_prestamos()
+    with tab1:
+        prestamos = db.obtener_prestamos()
+        if prestamos:
+            total_deuda = sum(db.obtener_saldo_prestamo(p['id']) for p in prestamos)
+            total_cuota_mes = calcular_total_prestamos_mes(db, mes, anio)
+            st.info(f"💡 Deuda total: **{formatear_moneda(total_deuda)}** · Cuota del mes: **{formatear_moneda(total_cuota_mes)}**")
+            st.markdown("---")
             
-            if prestamos and len(prestamos) > 0:
-                total_deuda = sum(db.obtener_saldo_prestamo(p['id']) for p in prestamos)
-                total_cuota_mes = calcular_total_prestamos_mes(db, mes, anio)
+            for prestamo in prestamos:
+                monto_total = safe_float(prestamo['monto_total'])
+                tasa_interes = safe_float(prestamo['tasa_interes'])
+                cuota_mensual = safe_float(prestamo['cuota_mensual'])
                 
-                st.info(f"💡 Deuda total: **{formatear_moneda(total_deuda)}** · Cuota del mes: **{formatear_moneda(total_cuota_mes)}**")
-                st.markdown("---")
-                
-                for prestamo in prestamos:
-                    with st.expander(f"💳 {prestamo['nombre']} - {formatear_moneda(prestamo['monto_total'])}"):
-                        saldo = db.obtener_saldo_prestamo(prestamo['id'])
-                        total_pagado = float(prestamo['monto_total']) - saldo
-                        
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Monto Original", formatear_moneda(prestamo['monto_total']))
-                            st.metric("Total Pagado", formatear_moneda(total_pagado))
-                        with col2:
-                            st.metric("Saldo Pendiente", formatear_moneda(saldo))
-                            st.metric("Cuota Mensual", formatear_moneda(prestamo['cuota_mensual']))
-                        with col3:
-                            st.metric("Tasa de Interés", f"{float(prestamo['tasa_interes']):.2f}%")
-                            st.metric("Tipo", str(prestamo['tipo']).capitalize())
-                        
-                        progreso = (total_pagado / float(prestamo['monto_total'])) * 100 if float(prestamo['monto_total']) > 0 else 0
-                        st.progress(min(progreso / 100, 1.0))
-                        st.caption(f"{progreso:.1f}% pagado")
-                        
-                        st.markdown("---")
-                        
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown("### 💸 Registrar Pago")
-                            with st.form(f"pago_{prestamo['id']}"):
-                                cuota_value = float(prestamo['cuota_mensual']) if prestamo['cuota_mensual'] else 0.0
-                                monto_pago = st.number_input(
-                                    "Monto del pago (S/)",
-                                    min_value=0.0,
-                                    step=0.01,
-                                    value=cuota_value,
-                                    format="%.2f"
-                                )
-                                fecha_pago = st.date_input("Fecha de pago", value=datetime.now())
-                                if st.form_submit_button("💸 Registrar Pago"):
-                                    if monto_pago > 0:
-                                        db.agregar_pago_prestamo(prestamo['id'], monto_pago, fecha_pago.isoformat())
-                                        st.success("¡Pago registrado!")
-                                        st.rerun()
-                        with col2:
-                            st.markdown("### 📜 Historial de Pagos")
-                            historial = db.obtener_historial_pagos_prestamo(prestamo['id'])
-                            if historial:
-                                for pago in historial[:5]:
-                                    st.markdown(f"**{formatear_moneda(pago['monto'])}** - {pago['fecha_pago']}")
-                            else:
-                                st.info("No hay pagos registrados")
-            else:
-                st.info("No hay préstamos registrados")
-        
-        with tab2:
-            st.subheader("Agregar Nuevo Préstamo")
-            with st.form("nuevo_prestamo"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    nombre = st.text_input("Nombre del préstamo")
-                    monto_total = st.number_input("Monto total (S/)", min_value=0.0, step=0.01, format="%.2f")
-                    tasa_interes = st.number_input("Tasa de interés (%)", min_value=0.0, step=0.1, format="%.2f")
-                with col2:
-                    cuota_mensual = st.number_input("Cuota mensual (S/)", min_value=0.0, step=0.01, format="%.2f")
-                    fecha_inicio = st.date_input("Fecha de inicio", value=datetime.now())
-                    tipo = st.selectbox("Tipo de préstamo",
-                                        ["bancario", "personal", "tarjeta de crédito", "vehículo", "hipotecario", "otro"])
-                submit = st.form_submit_button("Agregar Préstamo")
-                if submit:
-                    if nombre and monto_total > 0:
-                        db.agregar_prestamo(nombre, monto_total, tasa_interes,
-                                            fecha_inicio.isoformat(), cuota_mensual, tipo)
-                        st.success("¡Préstamo agregado exitosamente!")
-                        st.rerun()
-                    else:
-                        st.error("Por favor completa todos los campos correctamente")
-    except Exception as e:
-        st.error(f"Error al cargar préstamos: {str(e)}")
+                with st.expander(f" {prestamo['nombre']} - {formatear_moneda(monto_total)}"):
+                    saldo = db.obtener_saldo_prestamo(prestamo['id'])
+                    total_pagado = float(prestamo['monto_total']) - saldo
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Monto Original", formatear_moneda(prestamo['monto_total']))
+                        st.metric("Total Pagado", formatear_moneda(total_pagado))
+                    with col2:
+                        st.metric("Saldo Pendiente", formatear_moneda(saldo))
+                        st.metric("Cuota Mensual", formatear_moneda(prestamo['cuota_mensual']))
+                    with col3:
+                        st.metric("Tasa de Interés", f"{float(prestamo['tasa_interes']):.2f}%")
+                        st.metric("Tipo", str(prestamo['tipo']).capitalize())
+                    
+                    progreso = (total_pagado / float(prestamo['monto_total'])) * 100 if float(prestamo['monto_total']) > 0 else 0
+                    st.progress(min(progreso / 100, 1.0))
+                    st.caption(f"{progreso:.1f}% pagado")
+                    
+                    st.markdown("---")
+                    st.markdown("### 💸 Registrar Pago")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        with st.form(f"pago_{prestamo['id']}"):
+                            cuota_value = float(prestamo['cuota_mensual']) if prestamo['cuota_mensual'] else 0.0
+                            monto_pago = st.number_input(
+                                "Monto del pago (S/)",
+                                min_value=0.0,
+                                step=0.01,
+                                value=cuota_value,
+                                format="%.2f"
+                            )
+                            fecha_pago = st.date_input("Fecha de pago", value=datetime.now())
+                            if st.form_submit_button("💸 Registrar Pago"):
+                                if monto_pago > 0:
+                                    db.agregar_pago_prestamo(prestamo['id'], monto_pago, fecha_pago.isoformat())
+                                    st.success("¡Pago registrado!")
+                                    st.rerun()
+                    with col2:
+                        st.markdown("### 📜 Historial de Pagos")
+                        historial = db.obtener_historial_pagos_prestamo(prestamo['id'])
+                        if historial:
+                            for pago in historial[:5]:
+                                st.markdown(f"**{formatear_moneda(pago['monto'])}** - {pago['fecha_pago']}")
+                        else:
+                            st.info("No hay pagos registrados")
+        else:
+            st.info("No hay préstamos registrados")
+    
+    with tab2:
+        st.subheader("Agregar Nuevo Préstamo")
+        with st.form("nuevo_prestamo"):
+            col1, col2 = st.columns(2)
+            with col1:
+                nombre = st.text_input("Nombre del préstamo")
+                monto_total = st.number_input("Monto total (S/)", min_value=0.0, step=0.01, format="%.2f")
+                tasa_interes = st.number_input("Tasa de interés (%)", min_value=0.0, step=0.1, format="%.2f")
+            with col2:
+                cuota_mensual = st.number_input("Cuota mensual (S/)", min_value=0.0, step=0.01, format="%.2f")
+                fecha_inicio = st.date_input("Fecha de inicio", value=datetime.now())
+                tipo = st.selectbox("Tipo de préstamo",
+                                    ["bancario", "personal", "tarjeta de crédito", "vehículo", "hipotecario", "otro"])
+            submit = st.form_submit_button("Agregar Préstamo")
+            if submit:
+                if nombre and monto_total > 0:
+                    db.agregar_prestamo(nombre, monto_total, tasa_interes,
+                                        fecha_inicio.isoformat(), cuota_mensual, tipo)
+                    st.success("¡Préstamo agregado exitosamente!")
+                    st.rerun()
     
     render_footer()
 
@@ -1600,15 +1661,16 @@ def pagina_prestamos(db: DatabaseManager, mes: int, anio: int):
 # ============================================================
 def pagina_ahorros(db: DatabaseManager, mes: int, anio: int):
     st.title(" Gestión de Ahorros")
-    col1, col2 = st.columns([2, 1])
-    with col1:
+    tab1, tab2 = st.tabs(["📋 Ahorros del Mes", "➕ Registrar Ahorro"])
+    
+    with tab1:
         st.subheader(f"Ahorros - {obtener_nombre_mes(mes, anio)}")
         ahorros = db.obtener_ahorros(mes, anio)
         if ahorros and len(ahorros) > 0:
             total_ahorrado = sum(float(a['monto']) for a in ahorros)
             st.metric("Total Ahorrado este Mes", formatear_moneda(total_ahorrado))
-            saldo = calcular_saldo_disponible(db, mes, anio)
-            st.info(f"💰 Saldo disponible después de ahorrar: **{formatear_moneda(saldo)}**")
+            saldo_real = calcular_saldo_real_disponible(db, mes, anio)
+            st.info(f"💰 Saldo disponible después de ahorrar: **{formatear_moneda(saldo_real)}**")
             st.markdown("---")
             for ahorro in ahorros:
                 col1, col2, col3 = st.columns([3, 2, 1])
@@ -1623,38 +1685,46 @@ def pagina_ahorros(db: DatabaseManager, mes: int, anio: int):
                     st.markdown(f"**{formatear_moneda(ahorro['monto'])}**")
                     st.caption(f"Tipo: {ahorro['tipo']}")
                 with col3:
-                    if st.button("🗑️", key=f"del_ah_{ahorro['id']}"):
+                    if st.button("️", key=f"del_ah_{ahorro['id']}"):
                         db.eliminar_ahorro(ahorro['id'])
                         st.rerun()
         else:
             st.info("No hay ahorros registrados para este mes")
-    with col2:
-        st.subheader("Registrar Ahorro")
-        with st.form("nuevo_ahorro"):
-            concepto = st.text_input("Concepto")
-            monto = st.number_input("Monto (S/)", min_value=0.0, step=0.01, format="%.2f")
-            fecha = st.date_input("Fecha", value=datetime.now())
-            tipo = st.selectbox("Tipo", ["mensual", "emergencia", "vacaciones", "inversión", "otro"])
-            submit = st.form_submit_button("Registrar Ahorro")
+        
+        st.markdown("---")
+        st.subheader("📊 Historial de Ahorros")
+        hoy = datetime.now()
+        datos_historial = []
+        for i in range(6):
+            fecha = hoy - relativedelta(months=i)
+            ahorros_mes = db.obtener_ahorros(fecha.month, fecha.year)
+            total = sum(float(a['monto']) for a in ahorros_mes)
+            datos_historial.append({'Mes': fecha.strftime('%b %Y'), 'Ahorro': total})
+        df_historial = pd.DataFrame(datos_historial[::-1])
+        fig = px.bar(df_historial, x='Mes', y='Ahorro', title='Ahorros de los Últimos 6 Meses',
+                     color_discrete_sequence=['#198754'])
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with tab2:
+        st.subheader("➕ Registrar Nuevo Ahorro")
+        st.markdown("---")
+        with st.form("nuevo_ahorro", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                concepto = st.text_input("💰 Concepto del ahorro", placeholder="Ej: Fondo de emergencia, Vacaciones...")
+                monto = st.number_input("Monto (S/)", min_value=0.0, step=0.01, format="%.2f")
+            with col2:
+                fecha = st.date_input("📅 Fecha", value=datetime.now())
+                tipo = st.selectbox("📂 Tipo", ["mensual", "emergencia", "vacaciones", "inversión", "otro"])
+            st.markdown("---")
+            submit = st.form_submit_button("✅ Registrar Ahorro", use_container_width=True)
             if submit:
                 if concepto and monto > 0:
                     db.agregar_ahorro(concepto, monto, fecha.isoformat(), tipo)
                     st.success("¡Ahorro registrado!")
                     st.rerun()
-    st.markdown("---")
-    st.subheader("📊 Historial de Ahorros")
-    hoy = datetime.now()
-    datos_historial = []
-    for i in range(6):
-        fecha = hoy - relativedelta(months=i)
-        ahorros_mes = db.obtener_ahorros(fecha.month, fecha.year)
-        total = sum(float(a['monto']) for a in ahorros_mes)
-        datos_historial.append({'Mes': fecha.strftime('%b %Y'), 'Ahorro': total})
-    df_historial = pd.DataFrame(datos_historial[::-1])
-    fig = px.bar(df_historial, x='Mes', y='Ahorro', title='Ahorros de los Últimos 6 Meses',
-                 color_discrete_sequence=['#198754'])
-    fig.update_layout(height=400)
-    st.plotly_chart(fig, use_container_width=True)
+    
     render_footer()
 
 
@@ -1670,7 +1740,7 @@ def pagina_metas(db: DatabaseManager, mes: int, anio: int):
         metas = db.obtener_metas()
         if metas:
             for meta in metas:
-                with st.expander(f" {meta['nombre']} - {formatear_moneda(meta['monto_actual'])} / {formatear_moneda(meta['monto_objetivo'])}"):
+                with st.expander(f"🎯 {meta['nombre']} - {formatear_moneda(meta['monto_actual'])} / {formatear_moneda(meta['monto_objetivo'])}"):
                     progreso = (float(meta['monto_actual']) / float(meta['monto_objetivo'])) * 100 if float(meta['monto_objetivo']) > 0 else 0
                     col1, col2, col3 = st.columns(3)
                     with col1:
@@ -1701,22 +1771,22 @@ def pagina_metas(db: DatabaseManager, mes: int, anio: int):
                             monto_aporte = st.number_input("Monto (S/)", min_value=0.0, step=0.01, format="%.2f")
                             fecha_aporte = st.date_input("Fecha", value=datetime.now())
                             notas = st.text_input("Notas (opcional)")
-                            if st.form_submit_button("Aportar"):
+                            if st.form_submit_button(" Aportar"):
                                 if monto_aporte > 0:
                                     db.agregar_aporte_meta(meta['id'], monto_aporte, fecha_aporte.isoformat(), notas)
                                     st.success("¡Aporte registrado!")
                                     st.rerun()
                     with col2:
-                        if st.button("️ Eliminar Meta", key=f"del_meta_{meta['id']}"):
+                        if st.button("🗑️ Eliminar Meta", key=f"del_meta_{meta['id']}"):
                             db.eliminar_meta(meta['id'])
                             st.rerun()
         else:
-            st.info("No hay metas financieras.")
+            st.info("No hay metas financieras. ¡Crea tu primera meta!")
     
     with tab2:
         st.subheader("Crear Nueva Meta")
         with st.form("nueva_meta"):
-            nombre = st.text_input("Nombre de la meta")
+            nombre = st.text_input("Nombre de la meta (ej: Vacaciones, Fondo de emergencia)")
             monto_objetivo = st.number_input("Monto objetivo (S/)", min_value=0.0, step=0.01, format="%.2f")
             col1, col2 = st.columns(2)
             with col1:
@@ -1729,8 +1799,9 @@ def pagina_metas(db: DatabaseManager, mes: int, anio: int):
                 if nombre and monto_objetivo > 0:
                     fecha_str = fecha_limite.isoformat() if fecha_limite else None
                     db.agregar_meta(nombre, monto_objetivo, fecha_str, prioridad, descripcion)
-                    st.success("¡Meta creada!")
+                    st.success("¡Meta creada exitosamente!")
                     st.rerun()
+    
     render_footer()
 
 
@@ -1738,16 +1809,28 @@ def pagina_metas(db: DatabaseManager, mes: int, anio: int):
 # PÁGINA: PRESUPUESTOS
 # ============================================================
 def pagina_presupuestos(db: DatabaseManager, mes: int, anio: int):
-    st.title("📊 Gestión de Presupuestos")
+    st.title(" Gestión de Presupuestos")
     st.subheader(f"Presupuestos - {obtener_nombre_mes(mes, anio)}")
+    
     total_ingresos = calcular_total_ingresos(db, mes, anio)
     if total_ingresos > 0:
         st.success(f"💵 **Ingresos del mes:** {formatear_moneda(total_ingresos)}")
+        st.info(f"""
+        💡 **Regla 50/30/20 sugerida:**
+        - 🏠 **Necesidades (50%):** {formatear_moneda(total_ingresos * 0.5)}
+        - 🎯 **Deseos (30%):** {formatear_moneda(total_ingresos * 0.3)}
+        - 💰 **Ahorro (20%):** {formatear_moneda(total_ingresos * 0.2)}
+        """)
+    else:
+        st.warning("⚠️ Registra tus ingresos primero")
+    
     st.markdown("---")
+    
     presupuestos = db.obtener_presupuestos_mes(mes, anio)
     categorias = db.obtener_categorias()
     gastos_fijos = db.obtener_gastos_fijos_mensuales(mes, anio)
     gastos_variables = db.obtener_gastos_variables(mes, anio)
+    
     if presupuestos:
         st.markdown("### Presupuestos Actuales")
         for pres in presupuestos:
@@ -1771,6 +1854,7 @@ def pagina_presupuestos(db: DatabaseManager, mes: int, anio: int):
                 st.progress(min(porcentaje / 100, 1.0))
                 st.caption(f"{porcentaje:.1f}% usado")
             st.markdown("---")
+    
     st.markdown("### Configurar Presupuesto")
     with st.form("configurar_presupuesto"):
         col1, col2 = st.columns(2)
@@ -1789,6 +1873,7 @@ def pagina_presupuestos(db: DatabaseManager, mes: int, anio: int):
                 db.establecer_presupuesto(categoria_id, mes, anio, monto_presupuesto)
                 st.success("¡Presupuesto guardado!")
                 st.rerun()
+    
     render_footer()
 
 
@@ -1804,6 +1889,7 @@ def pagina_historial(db: DatabaseManager):
     with col2:
         mes_fin = st.selectbox("Mes fin", range(1, 13), index=datetime.now().month - 1)
         anio_fin = st.number_input("Año fin", value=datetime.now().year)
+    
     datos_historial = []
     try:
         fecha_actual = datetime(int(anio_inicio), int(mes_inicio), 1)
@@ -1812,6 +1898,7 @@ def pagina_historial(db: DatabaseManager):
             mes = fecha_actual.month
             anio = fecha_actual.year
             total_ingresos = calcular_total_ingresos(db, mes, anio)
+            ingresos_recibidos = calcular_total_ingresos_recibidos(db, mes, anio)
             gastos_fijos = db.obtener_gastos_fijos_mensuales(mes, anio)
             total_fijos = sum(float(g['monto']) for g in gastos_fijos)
             gastos_variables = db.obtener_gastos_variables(mes, anio)
@@ -1820,38 +1907,46 @@ def pagina_historial(db: DatabaseManager):
             total_ahorros = sum(float(a['monto']) for a in ahorros)
             total_prestamos = calcular_total_prestamos_mes(db, mes, anio)
             total_metas = calcular_total_aportes_metas_mes(db, mes, anio)
-            saldo = total_ingresos - (total_fijos + total_variables + total_ahorros + total_prestamos + total_metas)
+            saldo_proyectado = total_ingresos - (total_fijos + total_variables + total_ahorros + total_prestamos + total_metas)
             datos_historial.append({
                 'Mes': fecha_actual.strftime('%b %Y'),
-                'Ingresos': total_ingresos,
+                'Ingresos Total': total_ingresos,
+                'Ingresos Recibidos': ingresos_recibidos,
                 'Gastos Fijos': total_fijos,
                 'Gastos Variables': total_variables,
                 'Préstamos': total_prestamos,
                 'Ahorros': total_ahorros,
                 'Metas': total_metas,
-                'Saldo': saldo
+                'Saldo Proyectado': saldo_proyectado
             })
             fecha_actual += relativedelta(months=1)
     except Exception as e:
         st.error(f"Error al procesar historial: {str(e)}")
+    
     if datos_historial:
         df_historial = pd.DataFrame(datos_historial)
         st.subheader("📈 Evolución Financiera")
         fig = go.Figure()
-        fig.add_trace(go.Bar(name='Ingresos', x=df_historial['Mes'], y=df_historial['Ingresos'], marker_color='#198754'))
-        fig.add_trace(go.Bar(name='Gastos Fijos', x=df_historial['Mes'], y=df_historial['Gastos Fijos'], marker_color='#0d6efd'))
-        fig.add_trace(go.Bar(name='Gastos Variables', x=df_historial['Mes'], y=df_historial['Gastos Variables'], marker_color='#fd7e14'))
-        fig.add_trace(go.Scatter(name='Saldo', x=df_historial['Mes'], y=df_historial['Saldo'], mode='lines+markers', line=dict(color='#dc3545', width=3)))
-        fig.update_layout(barmode='stack', height=500, xaxis_tickangle=-45)
+        fig.add_trace(go.Bar(name='Ingresos Total', x=df_historial['Mes'],
+                             y=df_historial['Ingresos Total'], marker_color='#198754'))
+        fig.add_trace(go.Bar(name='Ingresos Recibidos', x=df_historial['Mes'],
+                             y=df_historial['Ingresos Recibidos'], marker_color='#20c997'))
+        fig.add_trace(go.Scatter(name='Saldo Proyectado', x=df_historial['Mes'],
+                                 y=df_historial['Saldo Proyectado'], mode='lines+markers',
+                                 line=dict(color='#dc3545', width=3), marker=dict(size=10)))
+        fig.update_layout(height=500, xaxis_tickangle=-45, hovermode='x unified')
         st.plotly_chart(fig, use_container_width=True)
-        st.subheader("📋 Detalle por Mes")
+        
+        st.subheader(" Detalle por Mes")
         st.dataframe(df_historial.style.format({
-            'Ingresos': 'S/ {:,.2f}', 'Gastos Fijos': 'S/ {:,.2f}',
-            'Gastos Variables': 'S/ {:,.2f}', 'Préstamos': 'S/ {:,.2f}',
-            'Ahorros': 'S/ {:,.2f}', 'Metas': 'S/ {:,.2f}', 'Saldo': 'S/ {:,.2f}'
+            'Ingresos Total': 'S/ {:,.2f}', 'Ingresos Recibidos': 'S/ {:,.2f}',
+            'Gastos Fijos': 'S/ {:,.2f}', 'Gastos Variables': 'S/ {:,.2f}',
+            'Préstamos': 'S/ {:,.2f}', 'Ahorros': 'S/ {:,.2f}',
+            'Metas': 'S/ {:,.2f}', 'Saldo Proyectado': 'S/ {:,.2f}'
         }), use_container_width=True)
     else:
-        st.info("No hay datos")
+        st.info("No hay datos en el período seleccionado")
+    
     render_footer()
 
 
@@ -1859,8 +1954,9 @@ def pagina_historial(db: DatabaseManager):
 # PÁGINA: CONFIGURACIÓN
 # ============================================================
 def pagina_configuracion(db: DatabaseManager):
-    st.title("⚙️ Configuración")
-    tab1, tab2 = st.tabs(["📂 Categorías", "👤 Usuario"])
+    st.title("️ Configuración")
+    tab1, tab2 = st.tabs(["📂 Categorías", " Usuario"])
+    
     with tab1:
         st.subheader("Gestión de Categorías")
         with st.form("nueva_categoria"):
@@ -1877,6 +1973,7 @@ def pagina_configuracion(db: DatabaseManager):
                     if db.agregar_categoria(nombre_categoria, tipo_categoria, icono=icono_categoria):
                         st.success("¡Categoría agregada!")
                         st.rerun()
+        
         st.markdown("---")
         st.subheader("Categorías Existentes")
         categorias = db.obtener_categorias()
@@ -1886,6 +1983,7 @@ def pagina_configuracion(db: DatabaseManager):
                 st.markdown(f"**{categoria['icono']} {categoria['nombre']}**")
             with col2:
                 st.markdown(f"Tipo: **{categoria['tipo'].capitalize()}**")
+    
     with tab2:
         st.subheader("Información del Usuario")
         if 'user' in st.session_state:
@@ -1899,6 +1997,7 @@ def pagina_configuracion(db: DatabaseManager):
                 if 'user' in st.session_state:
                     del st.session_state['user']
                 st.rerun()
+    
     render_footer()
 
 
@@ -1945,21 +2044,24 @@ def main():
         mes_options = {f"{m[2]}": (m[0], m[1]) for m in meses_disponibles}
         mes_seleccionado = st.selectbox("Seleccionar Mes", list(mes_options.keys()), index=6)
         mes, anio = mes_options[mes_seleccionado]
-        saldo = calcular_saldo_disponible(db, mes, anio)
-        color_saldo = "#198754" if saldo >= 0 else "#dc3545"
+        
+        saldo_real = calcular_saldo_real_disponible(db, mes, anio)
+        color_saldo = "#198754" if saldo_real >= 0 else "#dc3545"
         st.markdown(f"""
         <div style="background: {color_saldo}; color: white; padding: 1rem; border-radius: 10px; margin: 1rem 0; text-align: center;">
-            <div style="font-size: 0.8rem; opacity: 0.9;">SALDO DISPONIBLE</div>
-            <div style="font-size: 1.5rem; font-weight: 700;">{formatear_moneda(saldo)}</div>
+            <div style="font-size: 0.8rem; opacity: 0.9;">SALDO REAL DISPONIBLE</div>
+            <div style="font-size: 1.5rem; font-weight: 700;">{formatear_moneda(saldo_real)}</div>
         </div>
         """, unsafe_allow_html=True)
+        
         st.markdown("---")
         st.subheader("📋 Menú")
         pagina = st.radio("Navegación",
             ["🏠 Inicio", "💵 Ingresos", "💳 Gastos Fijos", "🛒 Gastos Variables",
-             "💰 Préstamos", "🏦 Ahorros", "🎯 Metas", "📊 Presupuestos",
+             "💰 Préstamos", "🏦 Ahorros", "🎯 Metas", " Presupuestos",
              "📅 Historial", "⚙️ Configuración"],
             label_visibility="collapsed")
+        
         st.markdown("---")
         st.markdown('<div class="footer-mini">🤖 CAVA - Roger Huamani</div>', unsafe_allow_html=True)
     
@@ -1973,7 +2075,7 @@ def main():
         pagina_gastos_variables(db, mes, anio)
     elif pagina == "💰 Préstamos":
         pagina_prestamos(db, mes, anio)
-    elif pagina == " Ahorros":
+    elif pagina == "🏦 Ahorros":
         pagina_ahorros(db, mes, anio)
     elif pagina == "🎯 Metas":
         pagina_metas(db, mes, anio)
