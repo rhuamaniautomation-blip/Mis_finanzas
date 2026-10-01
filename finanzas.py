@@ -1,9 +1,9 @@
-============================================================
-GESTOR FINANCIERO PERSONAL - CAVA
-Versión: 4.1 - Corrección Login y Préstamos
-Diseñado por: CAVA - Especialistas en Robótica y Automatización
-Desarrollador: Roger Huamani
-============================================================
+# ============================================================
+# GESTOR FINANCIERO PERSONAL - CAVA
+# Versión: 4.1 - Corrección Login y Préstamos
+# Diseñado por: CAVA - Especialistas en Robótica y Automatización
+# Desarrollador: Roger Huamani
+# ============================================================
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -18,9 +18,9 @@ import io
 import csv
 from supabase import create_client, Client
 
-============================================================
-CONFIGURACIÓN DE CONEXIÓN A SUPABASE
-============================================================
+# ============================================================
+# CONFIGURACIÓN DE CONEXIÓN A SUPABASE
+# ============================================================
 SUPABASE_URL = "https://fpiwaophixldoouneanr.supabase.co"
 try:
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -31,9 +31,9 @@ if not SUPABASE_KEY:
     st.error("⚠️ FALTA LA CLAVE DE SUPABASE\n\nConfigura SUPABASE_KEY en .streamlit/secrets.toml")
     st.stop()
 
-============================================================
-CONFIGURACIÓN DE PÁGINA
-============================================================
+# ============================================================
+# CONFIGURACIÓN DE PÁGINA
+# ============================================================
 st.set_page_config(
     page_title="Gestor Financiero Personal - CAVA",
     page_icon="💰",
@@ -41,20 +41,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-============================================================
-IMPORTAR SUPABASE
-============================================================
-from supabase import create_client, Client
-
+# ============================================================
+# IMPORTAR SUPABASE
+# ============================================================
 @st.cache_resource
 def get_supabase_client() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 supabase: Client = get_supabase_client()
 
-============================================================
-CSS PERSONALIZADO
-============================================================
+# ============================================================
+# CSS PERSONALIZADO
+# ============================================================
 st.markdown("""
 <style>
 :root {
@@ -283,9 +281,9 @@ h3 {
 </style>
 """, unsafe_allow_html=True)
 
-============================================================
-FUNCIONES AUXILIARES DE CONVERSIÓN
-============================================================
+# ============================================================
+# FUNCIONES AUXILIARES DE CONVERSIÓN
+# ============================================================
 def safe_float(value, default=0.0):
     if value is None:
         return default
@@ -307,9 +305,9 @@ def safe_str(value, default=""):
         return default
     return str(value)
 
-============================================================
-GESTOR DE BASE DE DATOS (SUPABASE)
-============================================================
+# ============================================================
+# GESTOR DE BASE DE DATOS (SUPABASE)
+# ============================================================
 class DatabaseManager:
     def __init__(self):
         self.client = supabase
@@ -833,9 +831,9 @@ class DatabaseManager:
         response = self.client.table('metas_financieras').update({'activo': 0}).eq('id', int(id)).execute()
         return len(response.data) > 0
 
-============================================================
-FUNCIONES AUXILIARES - CÁLCULOS FINANCIEROS
-============================================================
+# ============================================================
+# FUNCIONES AUXILIARES - CÁLCULOS FINANCIEROS
+# ============================================================
 def formatear_moneda(monto: float) -> str:
     return f"S/ {monto:,.2f}"
 
@@ -895,7 +893,6 @@ def calcular_saldo_real_disponible(db: DatabaseManager, mes: int, anio: int) -> 
     Este es el dinero REAL que tienes en este momento
     """
     ingresos_recibidos = calcular_total_ingresos_recibidos(db, mes, anio)
-    # Solo considerar egresos ya ejecutados
     gastos_fijos_pagados = calcular_total_gastos_fijos_pagados(db, mes, anio)
     gastos_variables = calcular_total_gastos_variables(db, mes, anio)
     prestamos_mes = calcular_total_prestamos_mes(db, mes, anio)
@@ -929,7 +926,6 @@ def render_saldo_card(db: DatabaseManager, mes: int, anio: int):
     ingresos_totales = calcular_total_ingresos(db, mes, anio)
     ingresos_recibidos = calcular_total_ingresos_recibidos(db, mes, anio)
 
-    # Tarjeta de Saldo Real Disponible (la más importante)
     if ingresos_recibidos == 0:
         clase_real, mensaje_real = "", "⚠️ Aún no has registrado ingresos recibidos"
     elif saldo_real < 0:
@@ -950,7 +946,6 @@ def render_saldo_card(db: DatabaseManager, mes: int, anio: int):
     </div>
     """, unsafe_allow_html=True)
 
-    # Tarjeta de Saldo Proyectado (informativa)
     if ingresos_totales > 0:
         porcentaje_recibido = (ingresos_recibidos / ingresos_totales) * 100
         if saldo_proyectado < 0:
@@ -983,9 +978,9 @@ def render_footer():
     </div>
     """, unsafe_allow_html=True)
 
-============================================================
-SISTEMA DE AUTENTICACIÓN
-============================================================
+# ============================================================
+# SISTEMA DE AUTENTICACIÓN
+# ============================================================
 def login():
     st.title("🔐 Iniciar Sesión")
     st.markdown("### Gestor Financiero Personal - Perú 🇵🇪")
@@ -1037,9 +1032,9 @@ def registro():
                 else:
                     st.error("❌ El nombre de usuario ya existe o hubo un error")
 
-============================================================
-PÁGINA: INICIO (DASHBOARD)
-============================================================
+# ============================================================
+# PÁGINA: INICIO (DASHBOARD)
+# ============================================================
 def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
     st.title(f"🏠 Dashboard - {obtener_nombre_mes(mes, anio)}")
     render_saldo_card(db, mes, anio)
@@ -1230,9 +1225,9 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
 
     render_footer()
 
-============================================================
-PÁGINA: INGRESOS (CON SALDO REAL)
-============================================================
+# ============================================================
+# PÁGINA: INGRESOS (CON SALDO REAL)
+# ============================================================
 def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
     st.title("💵 Gestión de Ingresos")
     tab1, tab2, tab3 = st.tabs(["📋 Ingresos del Mes", "⚙️ Configurar Ingresos", "📋 Copiar a Otro Mes"])
@@ -1245,7 +1240,6 @@ def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
             recibidos = sum(float(i['monto']) for i in ingresos if i['recibido'])
             pendientes = total - recibidos
 
-            # Calcular saldo REAL disponible (solo con lo recibido)
             saldo_real = calcular_saldo_real_disponible(db, mes, anio)
             saldo_proyectado = calcular_saldo_proyectado(db, mes, anio)
 
@@ -1254,7 +1248,6 @@ def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
             col2.metric("Recibidos", formatear_moneda(recibidos))
             col3.metric("Pendientes", formatear_moneda(pendientes))
 
-            # Mostrar ambos saldos claramente
             st.markdown("---")
             col_s1, col_s2 = st.columns(2)
             with col_s1:
@@ -1360,9 +1353,9 @@ def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
 
     render_footer()
 
-============================================================
-PÁGINA: GASTOS FIJOS
-============================================================
+# ============================================================
+# PÁGINA: GASTOS FIJOS
+# ============================================================
 def pagina_gastos_fijos(db: DatabaseManager, mes: int, anio: int):
     st.title("💳 Gestión de Gastos Fijos")
     tab1, tab2, tab3 = st.tabs(["📝 Gastos del Mes", "⚙️ Configurar Gastos", "📋 Copiar a Otro Mes"])
@@ -1470,12 +1463,11 @@ def pagina_gastos_fijos(db: DatabaseManager, mes: int, anio: int):
 
     render_footer()
 
-============================================================
-PÁGINA: GASTOS VARIABLES (FORMULARIO AMPLIADO)
-============================================================
+# ============================================================
+# PÁGINA: GASTOS VARIABLES (FORMULARIO AMPLIADO)
+# ============================================================
 def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
     st.title("🛒 Gestión de Gastos Variables")
-    # Usar tabs para separar la lista del formulario - AMBAS VISTAS AMPLIAS
     tab1, tab2 = st.tabs(["📋 Lista de Gastos Variables", "➕ Agregar Nuevo Gasto Variable"])
 
     with tab1:
@@ -1485,7 +1477,6 @@ def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
             total = sum(float(g['monto']) for g in gastos_variables)
             st.metric("Total Gastos Variables", formatear_moneda(total))
 
-            # Saldo real disponible
             saldo_real = calcular_saldo_real_disponible(db, mes, anio)
             if saldo_real >= 0:
                 st.success(f"💰 **Saldo real disponible:** {formatear_moneda(saldo_real)}")
@@ -1493,7 +1484,6 @@ def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
                 st.error(f"🚨 **Déficit:** {formatear_moneda(abs(saldo_real))}")
 
             st.markdown("---")
-            # Mostrar gastos en tabla amplia
             for gasto in gastos_variables:
                 col1, col2, col3, col4 = st.columns([4, 2, 2, 1])
                 with col1:
@@ -1531,7 +1521,6 @@ def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
         st.subheader("➕ Agregar Nuevo Gasto Variable")
         st.markdown("Registra un gasto variable como alimentación, transporte, entretenimiento, etc.")
         st.markdown("---")
-        # Formulario en vista completa (no en columna estrecha)
         with st.form("nuevo_gasto_variable", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
@@ -1564,9 +1553,9 @@ def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
 
     render_footer()
 
-============================================================
-PÁGINA: PRÉSTAMOS (CORREGIDO - SOPORTE DECIMALES)
-============================================================
+# ============================================================
+# PÁGINA: PRÉSTAMOS (CORREGIDO - SOPORTE DECIMALES)
+# ============================================================
 def pagina_prestamos(db: DatabaseManager, mes: int, anio: int):
     st.title("💰 Gestión de Préstamos y Deudas")
     tab1, tab2 = st.tabs(["📋 Mis Préstamos", "➕ Agregar Préstamo"])
@@ -1702,9 +1691,9 @@ def pagina_prestamos(db: DatabaseManager, mes: int, anio: int):
 
     render_footer()
 
-============================================================
-PÁGINA: AHORROS
-============================================================
+# ============================================================
+# PÁGINA: AHORROS
+# ============================================================
 def pagina_ahorros(db: DatabaseManager, mes: int, anio: int):
     st.title("🏦 Gestión de Ahorros")
     tab1, tab2 = st.tabs(["📋 Ahorros del Mes", "➕ Registrar Ahorro"])
@@ -1775,9 +1764,9 @@ def pagina_ahorros(db: DatabaseManager, mes: int, anio: int):
 
     render_footer()
 
-============================================================
-PÁGINA: METAS FINANCIERAS
-============================================================
+# ============================================================
+# PÁGINA: METAS FINANCIERAS
+# ============================================================
 def pagina_metas(db: DatabaseManager, mes: int, anio: int):
     st.title("🎯 Metas Financieras")
     st.markdown("Define y sigue tus objetivos financieros: vacaciones, emergencia, compras, etc.")
@@ -1855,9 +1844,9 @@ def pagina_metas(db: DatabaseManager, mes: int, anio: int):
 
     render_footer()
 
-============================================================
-PÁGINA: PRESUPUESTOS
-============================================================
+# ============================================================
+# PÁGINA: PRESUPUESTOS
+# ============================================================
 def pagina_presupuestos(db: DatabaseManager, mes: int, anio: int):
     st.title("📊 Gestión de Presupuestos")
     st.subheader(f"Presupuestos - {obtener_nombre_mes(mes, anio)}")
@@ -1927,9 +1916,9 @@ def pagina_presupuestos(db: DatabaseManager, mes: int, anio: int):
 
     render_footer()
 
-============================================================
-PÁGINA: HISTORIAL
-============================================================
+# ============================================================
+# PÁGINA: HISTORIAL
+# ============================================================
 def pagina_historial(db: DatabaseManager):
     st.title("📅 Historial Financiero")
 
@@ -2001,9 +1990,9 @@ def pagina_historial(db: DatabaseManager):
 
     render_footer()
 
-============================================================
-PÁGINA: CONFIGURACIÓN
-============================================================
+# ============================================================
+# PÁGINA: CONFIGURACIÓN
+# ============================================================
 def pagina_configuracion(db: DatabaseManager):
     st.title("⚙️ Configuración")
     tab1, tab2 = st.tabs(["📂 Categorías", "👤 Usuario"])
@@ -2054,9 +2043,9 @@ def pagina_configuracion(db: DatabaseManager):
 
     render_footer()
 
-============================================================
-FUNCIÓN PRINCIPAL (CORREGIDO - LÓGICA LOGIN/REGISTRO)
-============================================================
+# ============================================================
+# FUNCIÓN PRINCIPAL (CORREGIDO - LÓGICA LOGIN/REGISTRO)
+# ============================================================
 def main():
     db = DatabaseManager()
 
