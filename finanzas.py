@@ -242,16 +242,6 @@ h3 {
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
-.auth-container {
-    max-width: 500px;
-    margin: 2rem auto;
-    padding: 2rem;
-    background: var(--color-bg-card);
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-    border: 1px solid var(--color-border);
-}
-
 .auth-switch {
     text-align: center;
     margin-top: 1rem;
@@ -399,7 +389,7 @@ class DatabaseManager:
                 'nombre, color, icono'
             ).eq('id', r['categoria_id']).execute()
             cat = cat_response.data[0] if cat_response.data else {
-                'nombre': 'Sin categoría', 'color': '#607d8b', 'icono': '📦'
+                'nombre': 'Sin categoría', 'color': '#607d8b', 'icono': ''
             }
             result.append({
                 'id': r['id'], 'nombre': safe_str(r['nombre']),
@@ -838,12 +828,10 @@ def formatear_moneda(monto: float) -> str:
     return f"S/ {monto:,.2f}"
 
 def calcular_total_ingresos(db: DatabaseManager, mes: int, anio: int) -> float:
-    """Calcula el TOTAL de ingresos del mes (recibidos + pendientes)"""
     ingresos = db.obtener_ingresos_mensuales(mes, anio)
     return sum(float(i['monto']) for i in ingresos)
 
 def calcular_total_ingresos_recibidos(db: DatabaseManager, mes: int, anio: int) -> float:
-    """Calcula SOLO los ingresos ya recibidos"""
     ingresos = db.obtener_ingresos_mensuales(mes, anio)
     return sum(float(i['monto']) for i in ingresos if i['recibido'])
 
@@ -852,7 +840,6 @@ def calcular_total_gastos_fijos(db: DatabaseManager, mes: int, anio: int) -> flo
     return sum(float(g['monto']) for g in gastos)
 
 def calcular_total_gastos_fijos_pagados(db: DatabaseManager, mes: int, anio: int) -> float:
-    """Calcula SOLO los gastos fijos ya pagados"""
     gastos = db.obtener_gastos_fijos_mensuales(mes, anio)
     return sum(float(g['monto']) for g in gastos if g['pagado'])
 
@@ -874,10 +861,6 @@ def calcular_total_aportes_metas_mes(db: DatabaseManager, mes: int, anio: int) -
     return sum(db.obtener_aportes_meta_mes(m['id'], mes, anio) for m in metas)
 
 def calcular_saldo_proyectado(db: DatabaseManager, mes: int, anio: int) -> float:
-    """
-    SALDO PROYECTADO: Considera TODOS los ingresos del mes (recibidos + pendientes)
-    Útil para planificación
-    """
     ingresos = calcular_total_ingresos(db, mes, anio)
     egresos = (calcular_total_gastos_fijos(db, mes, anio) +
                calcular_total_gastos_variables(db, mes, anio) +
@@ -887,11 +870,6 @@ def calcular_saldo_proyectado(db: DatabaseManager, mes: int, anio: int) -> float
     return ingresos - egresos
 
 def calcular_saldo_real_disponible(db: DatabaseManager, mes: int, anio: int) -> float:
-    """
-    SALDO REAL DISPONIBLE: Considera SOLO los ingresos ya recibidos
-    y SOLO los egresos ya ejecutados (gastos fijos pagados + gastos variables + préstamos pagados + ahorros + metas)
-    Este es el dinero REAL que tienes en este momento
-    """
     ingresos_recibidos = calcular_total_ingresos_recibidos(db, mes, anio)
     gastos_fijos_pagados = calcular_total_gastos_fijos_pagados(db, mes, anio)
     gastos_variables = calcular_total_gastos_variables(db, mes, anio)
@@ -920,7 +898,6 @@ def obtener_nombre_mes(mes: int, anio: int) -> str:
         return f"Mes {mes} {anio}"
 
 def render_saldo_card(db: DatabaseManager, mes: int, anio: int):
-    """Renderiza las tarjetas de saldo: PROYECTADO y REAL DISPONIBLE"""
     saldo_proyectado = calcular_saldo_proyectado(db, mes, anio)
     saldo_real = calcular_saldo_real_disponible(db, mes, anio)
     ingresos_totales = calcular_total_ingresos(db, mes, anio)
@@ -1089,7 +1066,7 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
     with col4:
         st.markdown(f"""
         <div class="metric-card" style="border-left: 5px solid #6f42c1;">
-            <div style="font-size: 0.85rem; color: #6c757d; text-transform: uppercase;">🎯 Metas</div>
+            <div style="font-size: 0.85rem; color: #6c757d; text-transform: uppercase;"> Metas</div>
             <div style="font-size: 1.3rem; font-weight: 600; color: #6f42c1;">{formatear_moneda(total_aportes_metas)}</div>
             <div style="font-size: 0.75rem; color: #6c757d;">Aportado este mes</div>
         </div>
@@ -1125,7 +1102,7 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
                 fig.update_layout(height=400)
                 st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("💡 Registra tus ingresos en ' Ingresos'")
+            st.info("💡 Registra tus ingresos en '💵 Ingresos'")
 
     with col2:
         st.subheader("📉 Presupuesto vs Real")
@@ -1163,7 +1140,7 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
                 progreso = (float(meta['monto_actual']) / float(meta['monto_objetivo'])) * 100 if float(meta['monto_objetivo']) > 0 else 0
                 st.markdown(f"""
                 <div class="goal-card">
-                    <div style="font-weight: 600; font-size: 1.1rem;"> {meta['nombre']}</div>
+                    <div style="font-weight: 600; font-size: 1.1rem;">🎯 {meta['nombre']}</div>
                     <div style="font-size: 0.9rem; margin: 0.5rem 0;">
                         {formatear_moneda(meta['monto_actual'])} / {formatear_moneda(meta['monto_objetivo'])}
                     </div>
@@ -1204,7 +1181,7 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
         st.markdown("#### 💸 Gastos Fijos del Mes")
         if gastos_fijos:
             for gasto in gastos_fijos:
-                estado = "✅" if gasto['pagado'] else "⏳"
+                estado = "✅" if gasto['pagado'] else ""
                 st.markdown(f"""
                 <div class="{'paid-expense' if gasto['pagado'] else 'pending-expense'}">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1226,11 +1203,11 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
     render_footer()
 
 # ============================================================
-# PÁGINA: INGRESOS (CON SALDO REAL)
+# PÁGINA: INGRESOS
 # ============================================================
 def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
     st.title("💵 Gestión de Ingresos")
-    tab1, tab2, tab3 = st.tabs(["📋 Ingresos del Mes", "️ Configurar Ingresos", " Copiar a Otro Mes"])
+    tab1, tab2, tab3 = st.tabs(["📋 Ingresos del Mes", "⚙️ Configurar Ingresos", " Copiar a Otro Mes"])
 
     with tab1:
         st.subheader(f"Ingresos - {obtener_nombre_mes(mes, anio)}")
@@ -1437,7 +1414,7 @@ def pagina_gastos_fijos(db: DatabaseManager, mes: int, anio: int):
                         st.markdown(f"**Día de pago:** {gasto['fecha_pago']}")
                         st.markdown(f"**Frecuencia:** {gasto['frecuencia']}")
                     with col2:
-                        if st.button("🗑️ Eliminar", key=f"del_gf_{gasto['id']}"):
+                        if st.button("️ Eliminar", key=f"del_gf_{gasto['id']}"):
                             db.eliminar_gasto_fijo(gasto['id'])
                             st.rerun()
         else:
@@ -1467,7 +1444,7 @@ def pagina_gastos_fijos(db: DatabaseManager, mes: int, anio: int):
 # PÁGINA: GASTOS VARIABLES
 # ============================================================
 def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
-    st.title("🛒 Gestión de Gastos Variables")
+    st.title(" Gestión de Gastos Variables")
     tab1, tab2 = st.tabs(["📋 Lista de Gastos Variables", "➕ Agregar Nuevo Gasto Variable"])
 
     with tab1:
@@ -1498,7 +1475,7 @@ def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
                 with col3:
                     st.markdown(f"**{formatear_moneda(gasto['monto'])}**")
                 with col4:
-                    if st.button("️", key=f"del_gv_{gasto['id']}"):
+                    if st.button("🗑️", key=f"del_gv_{gasto['id']}"):
                         db.eliminar_gasto_variable(gasto['id'])
                         st.rerun()
 
@@ -1514,11 +1491,9 @@ def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No hay gastos variables registrados para este mes.")
-            st.markdown("### 💡 ¿Cómo empezar?")
-            st.markdown("Ve a la pestaña **'➕ Agregar Nuevo Gasto Variable'** para registrar tu primer gasto.")
 
     with tab2:
-        st.subheader(" Agregar Nuevo Gasto Variable")
+        st.subheader("➕ Agregar Nuevo Gasto Variable")
         st.markdown("Registra un gasto variable como alimentación, transporte, entretenimiento, etc.")
         st.markdown("---")
         with st.form("nuevo_gasto_variable", clear_on_submit=True):
@@ -1557,7 +1532,7 @@ def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
 # PÁGINA: PRÉSTAMOS (CORREGIDO - SOPORTE DECIMALES)
 # ============================================================
 def pagina_prestamos(db: DatabaseManager, mes: int, anio: int):
-    st.title(" Gestión de Préstamos y Deudas")
+    st.title("💰 Gestión de Préstamos y Deudas")
     tab1, tab2 = st.tabs(["📋 Mis Préstamos", "➕ Agregar Préstamo"])
 
     with tab1:
@@ -1606,7 +1581,7 @@ def pagina_prestamos(db: DatabaseManager, mes: int, anio: int):
                                 format="%.2f"
                             )
                             fecha_pago = st.date_input("Fecha de pago", value=datetime.now())
-                            if st.form_submit_button("💸 Registrar Pago"):
+                            if st.form_submit_button(" Registrar Pago"):
                                 if monto_pago > 0:
                                     db.agregar_pago_prestamo(prestamo['id'], monto_pago, fecha_pago.isoformat())
                                     st.success("¡Pago registrado!")
@@ -1633,7 +1608,7 @@ def pagina_prestamos(db: DatabaseManager, mes: int, anio: int):
             with col1:
                 nombre = st.text_input("📝 Nombre del préstamo", placeholder="Ej: Préstamo BCP, Crédito vehicular...")
                 monto_total = st.number_input(
-                    " Monto total (S/)",
+                    "💵 Monto total (S/)",
                     min_value=0.0,
                     step=0.01,
                     format="%.2f",
@@ -1646,7 +1621,7 @@ def pagina_prestamos(db: DatabaseManager, mes: int, anio: int):
                     format="%.2f",
                     help="Tasa de interés anual o mensual"
                 )
-                fecha_inicio = st.date_input("📅 Fecha de inicio", value=datetime.now())
+                fecha_inicio = st.date_input(" Fecha de inicio", value=datetime.now())
             with col2:
                 cuota_mensual = st.number_input(
                     "💳 Cuota mensual (S/)",
@@ -1655,9 +1630,9 @@ def pagina_prestamos(db: DatabaseManager, mes: int, anio: int):
                     format="%.2f",
                     help="Monto de la cuota mensual con decimales"
                 )
-                fecha_fin = st.date_input(" Fecha de fin (opcional)", value=None)
+                fecha_fin = st.date_input("📅 Fecha de fin (opcional)", value=None)
                 tipo = st.selectbox(
-                    "️ Tipo de préstamo",
+                    "🏷️ Tipo de préstamo",
                     ["bancario", "personal", "tarjeta de crédito", "vehículo", "hipotecario", "otro"]
                 )
 
@@ -1719,14 +1694,14 @@ def pagina_ahorros(db: DatabaseManager, mes: int, anio: int):
                     st.markdown(f"**{formatear_moneda(ahorro['monto'])}**")
                     st.caption(f"Tipo: {ahorro['tipo']}")
                 with col3:
-                    if st.button("🗑️", key=f"del_ah_{ahorro['id']}"):
+                    if st.button("️", key=f"del_ah_{ahorro['id']}"):
                         db.eliminar_ahorro(ahorro['id'])
                         st.rerun()
         else:
             st.info("No hay ahorros registrados para este mes")
 
         st.markdown("---")
-        st.subheader("📊 Historial de Ahorros")
+        st.subheader(" Historial de Ahorros")
         hoy = datetime.now()
         datos_historial = []
         for i in range(6):
@@ -1766,9 +1741,9 @@ def pagina_ahorros(db: DatabaseManager, mes: int, anio: int):
 # PÁGINA: METAS FINANCIERAS
 # ============================================================
 def pagina_metas(db: DatabaseManager, mes: int, anio: int):
-    st.title("🎯 Metas Financieras")
+    st.title(" Metas Financieras")
     st.markdown("Define y sigue tus objetivos financieros: vacaciones, emergencia, compras, etc.")
-    tab1, tab2 = st.tabs([" Mis Metas", "➕ Nueva Meta"])
+    tab1, tab2 = st.tabs(["🎯 Mis Metas", "➕ Nueva Meta"])
 
     with tab1:
         metas = db.obtener_metas()
@@ -1855,11 +1830,11 @@ def pagina_presupuestos(db: DatabaseManager, mes: int, anio: int):
         st.info(f"""
         💡 **Regla 50/30/20 sugerida:**
         - 🏠 **Necesidades (50%):** {formatear_moneda(total_ingresos * 0.5)}
-        -  **Deseos (30%):** {formatear_moneda(total_ingresos * 0.3)}
+        - 🎯 **Deseos (30%):** {formatear_moneda(total_ingresos * 0.3)}
         - 💰 **Ahorro (20%):** {formatear_moneda(total_ingresos * 0.2)}
         """)
     else:
-        st.warning("️ Registra tus ingresos primero")
+        st.warning("⚠️ Registra tus ingresos primero")
 
     st.markdown("---")
     presupuestos = db.obtener_presupuestos_mes(mes, anio)
@@ -2119,24 +2094,24 @@ def main():
         """, unsafe_allow_html=True)
 
         st.markdown("---")
-        st.subheader(" Menú")
+        st.subheader("📋 Menú")
         pagina = st.radio("Navegación",
             ["🏠 Inicio", "💵 Ingresos", "💳 Gastos Fijos", "🛒 Gastos Variables",
-             "💰 Préstamos", " Ahorros", "🎯 Metas", "📊 Presupuestos",
-             " Historial", "⚙️ Configuración"],
+             "💰 Préstamos", "🏦 Ahorros", "🎯 Metas", "📊 Presupuestos",
+             "📅 Historial", "⚙️ Configuración"],
             label_visibility="collapsed")
 
         st.markdown("---")
         st.markdown('<div class="footer-mini">🤖 CAVA - Roger Huamani</div>', unsafe_allow_html=True)
 
     # Enrutamiento de páginas
-    if pagina == "🏠 Inicio":
+    if pagina == " Inicio":
         pagina_inicio(db, mes, anio)
     elif pagina == "💵 Ingresos":
         pagina_ingresos(db, mes, anio)
     elif pagina == "💳 Gastos Fijos":
         pagina_gastos_fijos(db, mes, anio)
-    elif pagina == " Gastos Variables":
+    elif pagina == "🛒 Gastos Variables":
         pagina_gastos_variables(db, mes, anio)
     elif pagina == "💰 Préstamos":
         pagina_prestamos(db, mes, anio)
