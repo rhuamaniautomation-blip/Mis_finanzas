@@ -1,6 +1,6 @@
 # ============================================================
 # GESTOR FINANCIERO PERSONAL - CAVA
-# Versión: 4.1 - Corrección Autenticación + Decimales
+# Versión: 4.2 - Corrección Autenticación y Formularios
 # Diseñado por: CAVA - Especialistas en Robótica y Automatización
 # Desarrollador: Roger Huamani
 # ============================================================
@@ -242,33 +242,6 @@ h3 {
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
-.login-container {
-    max-width: 500px;
-    margin: 2rem auto;
-    padding: 2rem;
-    background: white;
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-}
-
-.login-toggle-btn {
-    width: 100%;
-    padding: 0.75rem;
-    margin-top: 1rem;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: transform 0.2s;
-}
-
-.login-toggle-btn:hover {
-    transform: translateY(-2px);
-}
-
 @media (max-width: 768px) {
     .main .block-container { padding: 0.75rem; }
     h1 { font-size: 1.4rem !important; }
@@ -338,11 +311,11 @@ class DatabaseManager:
                     {'nombre': 'Salud', 'tipo': 'variable', 'color': '#6f42c1', 'icono': ''},
                     {'nombre': 'Educación', 'tipo': 'variable', 'color': '#795548', 'icono': ''},
                     {'nombre': 'Entretenimiento', 'tipo': 'variable', 'color': '#e83e8c', 'icono': ''},
-                    {'nombre': 'Ropa', 'tipo': 'variable', 'color': '#6c757d', 'icono': ''},
+                    {'nombre': 'Ropa', 'tipo': 'variable', 'color': '#6c757d', 'icono': '👕'},
                     {'nombre': 'Seguros', 'tipo': 'fijo', 'color': '#ffc107', 'icono': '🛡️'},
                     {'nombre': 'Internet y Teléfono', 'tipo': 'fijo', 'color': '#0dcaf0', 'icono': '📱'},
                     {'nombre': 'Tarjetas de Crédito', 'tipo': 'fijo', 'color': '#fd7e14', 'icono': '💳'},
-                    {'nombre': 'Impuestos SUNAT', 'tipo': 'fijo', 'color': '#6f42c1', 'icono': ''},
+                    {'nombre': 'Impuestos SUNAT', 'tipo': 'fijo', 'color': '#6f42c1', 'icono': '📋'},
                     {'nombre': 'AFP/ONP', 'tipo': 'fijo', 'color': '#20c997', 'icono': ''},
                     {'nombre': 'Otros', 'tipo': 'variable', 'color': '#495057', 'icono': '📦'}
                 ]
@@ -360,21 +333,27 @@ class DatabaseManager:
                 'nombre_completo': nombre_completo
             }).execute()
             return True
-        except Exception:
+        except Exception as e:
+            st.error(f"Error al crear usuario: {str(e)}")
             return False
 
     def verificar_usuario(self, username: str, password: str) -> Optional[Dict]:
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-        response = self.client.table('usuarios').select(
-            'id, username, nombre_completo'
-        ).eq('username', username).eq('password_hash', password_hash).execute()
-        if response.data:
-            return {
-                'id': response.data[0]['id'],
-                'username': response.data[0]['username'],
-                'nombre': response.data[0]['nombre_completo']
-            }
-        return None
+        try:
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            response = self.client.table('usuarios').select(
+                'id, username, nombre_completo'
+            ).eq('username', username).eq('password_hash', password_hash).execute()
+            
+            if response.data and len(response.data) > 0:
+                return {
+                    'id': response.data[0]['id'],
+                    'username': response.data[0]['username'],
+                    'nombre': response.data[0]['nombre_completo']
+                }
+            return None
+        except Exception as e:
+            st.error(f"Error al verificar usuario: {str(e)}")
+            return None
 
     # ==================== CATEGORÍAS ====================
     def obtener_categorias(self, tipo: Optional[str] = None) -> List[Dict]:
@@ -408,7 +387,7 @@ class DatabaseManager:
                 'nombre, color, icono'
             ).eq('id', r['categoria_id']).execute()
             cat = cat_response.data[0] if cat_response.data else {
-                'nombre': 'Sin categoría', 'color': '#607d8b', 'icono': '📦'
+                'nombre': 'Sin categoría', 'color': '#607d8b', 'icono': ''
             }
             result.append({
                 'id': r['id'], 'nombre': safe_str(r['nombre']),
@@ -460,7 +439,7 @@ class DatabaseManager:
                 'nombre, color, icono'
             ).eq('id', ing['categoria_id']).execute() if ing['categoria_id'] else None
             cat = cat_response.data[0] if cat_response and cat_response.data else {
-                'nombre': 'Sin categoría', 'color': '#607d8b', 'icono': '📦'
+                'nombre': 'Sin categoría', 'color': '#607d8b', 'icono': ''
             }
             result.append({
                 'id': r['id'], 'ingreso_id': r['ingreso_id'],
@@ -839,12 +818,10 @@ def formatear_moneda(monto: float) -> str:
     return f"S/ {monto:,.2f}"
 
 def calcular_total_ingresos(db: DatabaseManager, mes: int, anio: int) -> float:
-    """Calcula el TOTAL de ingresos del mes (recibidos + pendientes)"""
     ingresos = db.obtener_ingresos_mensuales(mes, anio)
     return sum(float(i['monto']) for i in ingresos)
 
 def calcular_total_ingresos_recibidos(db: DatabaseManager, mes: int, anio: int) -> float:
-    """Calcula SOLO los ingresos ya recibidos"""
     ingresos = db.obtener_ingresos_mensuales(mes, anio)
     return sum(float(i['monto']) for i in ingresos if i['recibido'])
 
@@ -853,7 +830,6 @@ def calcular_total_gastos_fijos(db: DatabaseManager, mes: int, anio: int) -> flo
     return sum(float(g['monto']) for g in gastos)
 
 def calcular_total_gastos_fijos_pagados(db: DatabaseManager, mes: int, anio: int) -> float:
-    """Calcula SOLO los gastos fijos ya pagados"""
     gastos = db.obtener_gastos_fijos_mensuales(mes, anio)
     return sum(float(g['monto']) for g in gastos if g['pagado'])
 
@@ -875,10 +851,6 @@ def calcular_total_aportes_metas_mes(db: DatabaseManager, mes: int, anio: int) -
     return sum(db.obtener_aportes_meta_mes(m['id'], mes, anio) for m in metas)
 
 def calcular_saldo_proyectado(db: DatabaseManager, mes: int, anio: int) -> float:
-    """
-    SALDO PROYECTADO: Considera TODOS los ingresos del mes (recibidos + pendientes)
-    Útil para planificación
-    """
     ingresos = calcular_total_ingresos(db, mes, anio)
     egresos = (calcular_total_gastos_fijos(db, mes, anio) +
                calcular_total_gastos_variables(db, mes, anio) +
@@ -888,20 +860,12 @@ def calcular_saldo_proyectado(db: DatabaseManager, mes: int, anio: int) -> float
     return ingresos - egresos
 
 def calcular_saldo_real_disponible(db: DatabaseManager, mes: int, anio: int) -> float:
-    """
-    SALDO REAL DISPONIBLE: Considera SOLO los ingresos ya recibidos
-    y SOLO los egresos ya ejecutados (gastos fijos pagados + gastos variables + préstamos pagados + ahorros + metas)
-    Este es el dinero REAL que tienes en este momento
-    """
     ingresos_recibidos = calcular_total_ingresos_recibidos(db, mes, anio)
-    
-    # Solo considerar egresos ya ejecutados
     gastos_fijos_pagados = calcular_total_gastos_fijos_pagados(db, mes, anio)
     gastos_variables = calcular_total_gastos_variables(db, mes, anio)
     prestamos_mes = calcular_total_prestamos_mes(db, mes, anio)
     ahorros_mes = calcular_total_ahorros_mes(db, mes, anio)
     metas_mes = calcular_total_aportes_metas_mes(db, mes, anio)
-    
     egresos_ejecutados = gastos_fijos_pagados + gastos_variables + prestamos_mes + ahorros_mes + metas_mes
     return ingresos_recibidos - egresos_ejecutados
 
@@ -924,13 +888,11 @@ def obtener_nombre_mes(mes: int, anio: int) -> str:
         return f"Mes {mes} {anio}"
 
 def render_saldo_card(db: DatabaseManager, mes: int, anio: int):
-    """Renderiza las tarjetas de saldo: PROYECTADO y REAL DISPONIBLE"""
     saldo_proyectado = calcular_saldo_proyectado(db, mes, anio)
     saldo_real = calcular_saldo_real_disponible(db, mes, anio)
     ingresos_totales = calcular_total_ingresos(db, mes, anio)
     ingresos_recibidos = calcular_total_ingresos_recibidos(db, mes, anio)
     
-    # Tarjeta de Saldo Real Disponible (la más importante)
     if ingresos_recibidos == 0:
         clase_real, mensaje_real = "", "⚠️ Aún no has registrado ingresos recibidos"
     elif saldo_real < 0:
@@ -951,7 +913,6 @@ def render_saldo_card(db: DatabaseManager, mes: int, anio: int):
     </div>
     """, unsafe_allow_html=True)
     
-    # Tarjeta de Saldo Proyectado (informativa)
     if ingresos_totales > 0:
         porcentaje_recibido = (ingresos_recibidos / ingresos_totales) * 100
         if saldo_proyectado < 0:
@@ -969,7 +930,7 @@ def render_saldo_card(db: DatabaseManager, mes: int, anio: int):
                 Si recibes todos los ingresos pendientes: {formatear_moneda(ingresos_totales - ingresos_recibidos)}
             </div>
             <div style="font-size: 0.85rem; opacity: 0.9; margin-top: 0.5rem;">
-                 {porcentaje_recibido:.1f}% de ingresos ya recibidos
+                📈 {porcentaje_recibido:.1f}% de ingresos ya recibidos
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -992,31 +953,71 @@ def login():
     st.markdown("### Gestor Financiero Personal - Perú 🇵🇪")
     st.markdown("---")
     
+    # Crear formulario
     with st.form("login_form", clear_on_submit=False):
-        username = st.text_input("👤 Usuario", placeholder="Ingresa tu nombre de usuario")
-        password = st.text_input("🔒 Contraseña", type="password", placeholder="Ingresa tu contraseña")
-        submit = st.form_submit_button("🚪 Ingresar", use_container_width=True)
+        st.markdown("#### Ingresa tus credenciales")
         
-        if submit:
+        username = st.text_input(
+            "👤 Usuario",
+            placeholder="Ingresa tu nombre de usuario",
+            help="El nombre de usuario que registraste"
+        )
+        
+        password = st.text_input(
+            "🔒 Contraseña",
+            type="password",
+            placeholder="Ingresa tu contraseña",
+            help="Tu contraseña debe tener al menos 6 caracteres"
+        )
+        
+        # Botón de submit dentro del formulario
+        submit_button = st.form_submit_button(
+            "🚪 Ingresar",
+            use_container_width=True,
+            type="primary"
+        )
+        
+        # Procesar el formulario cuando se envía
+        if submit_button:
+            # Validación de campos vacíos
             if not username or not password:
                 st.error("⚠️ Por favor completa todos los campos")
-            else:
-                db = DatabaseManager()
-                user = db.verificar_usuario(username, password)
-                if user:
-                    st.session_state['logged_in'] = True
-                    st.session_state['user'] = user
-                    st.session_state['show_login'] = True
-                    st.success("✅ ¡Inicio de sesión exitoso!")
-                    st.rerun()
-                else:
-                    st.error("❌ Usuario o contraseña incorrectos")
+                st.stop()
+            
+            # Mostrar mensaje de carga
+            with st.spinner("Verificando credenciales..."):
+                try:
+                    db = DatabaseManager()
+                    user = db.verificar_usuario(username, password)
+                    
+                    if user:
+                        # Login exitoso
+                        st.session_state['logged_in'] = True
+                        st.session_state['user'] = user
+                        st.session_state['show_login'] = True
+                        
+                        st.success(f"✅ ¡Bienvenido {user['nombre']}!")
+                        st.balloons()
+                        
+                        # Forzar rerun después de un pequeño delay
+                        import time
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        # Login fallido
+                        st.error("❌ Usuario o contraseña incorrectos")
+                        st.info("💡 Verifica que tus credenciales sean correctas")
+                        
+                except Exception as e:
+                    st.error(f"❌ Error al iniciar sesión: {str(e)}")
+                    st.exception(e)
     
+    # Separador y botón para registro
     st.markdown("---")
     st.markdown("### ¿No tienes una cuenta?")
     st.markdown("Regístrate para comenzar a gestionar tus finanzas")
     
-    if st.button(" Crear cuenta nueva", use_container_width=True):
+    if st.button("📝 Crear cuenta nueva", use_container_width=True):
         st.session_state['show_login'] = False
         st.rerun()
 
@@ -1026,33 +1027,76 @@ def registro():
     st.markdown("---")
     
     with st.form("registro_form", clear_on_submit=False):
-        nombre_completo = st.text_input("👤 Nombre Completo", placeholder="Ej: Juan Pérez García")
-        username = st.text_input("🆔 Usuario", placeholder="Elige un nombre de usuario único")
-        password = st.text_input("🔒 Contraseña", type="password", placeholder="Mínimo 6 caracteres")
-        password_confirm = st.text_input(" Confirmar Contraseña", type="password", placeholder="Repite tu contraseña")
-        submit = st.form_submit_button("✅ Registrarse", use_container_width=True)
+        st.markdown("#### Completa tus datos")
         
-        if submit:
+        nombre_completo = st.text_input(
+            "👤 Nombre Completo",
+            placeholder="Ej: Juan Pérez García",
+            help="Tu nombre completo"
+        )
+        
+        username = st.text_input(
+            "🆔 Usuario",
+            placeholder="Elige un nombre de usuario único",
+            help="Este será tu nombre de usuario para iniciar sesión"
+        )
+        
+        password = st.text_input(
+            "🔒 Contraseña",
+            type="password",
+            placeholder="Mínimo 6 caracteres",
+            help="La contraseña debe tener al menos 6 caracteres"
+        )
+        
+        password_confirm = st.text_input(
+            "🔒 Confirmar Contraseña",
+            type="password",
+            placeholder="Repite tu contraseña",
+            help="Debe coincidir con la contraseña anterior"
+        )
+        
+        submit_button = st.form_submit_button(
+            "✅ Registrarse",
+            use_container_width=True,
+            type="primary"
+        )
+        
+        if submit_button:
+            # Validaciones
             if not nombre_completo or not username or not password or not password_confirm:
                 st.error("⚠️ Por favor completa todos los campos")
-            elif password != password_confirm:
+                st.stop()
+            
+            if password != password_confirm:
                 st.error("❌ Las contraseñas no coinciden")
-            elif len(password) < 6:
+                st.stop()
+            
+            if len(password) < 6:
                 st.error("❌ La contraseña debe tener al menos 6 caracteres")
-            else:
-                db = DatabaseManager()
-                if db.crear_usuario(username, password, nombre_completo):
-                    st.success("✅ ¡Registro exitoso! Ahora puedes iniciar sesión")
-                    st.session_state['show_login'] = True
-                    st.rerun()
-                else:
-                    st.error("❌ El nombre de usuario ya existe. Intenta con otro.")
+                st.stop()
+            
+            # Crear usuario
+            with st.spinner("Creando tu cuenta..."):
+                try:
+                    db = DatabaseManager()
+                    if db.crear_usuario(username, password, nombre_completo):
+                        st.success("✅ ¡Registro exitoso! Ahora puedes iniciar sesión")
+                        st.session_state['show_login'] = True
+                        
+                        import time
+                        time.sleep(1.5)
+                        st.rerun()
+                    else:
+                        st.error("❌ El nombre de usuario ya existe. Intenta con otro.")
+                except Exception as e:
+                    st.error(f"❌ Error al crear usuario: {str(e)}")
+                    st.exception(e)
     
     st.markdown("---")
     st.markdown("### ¿Ya tienes una cuenta?")
     st.markdown("Inicia sesión para acceder a tu gestor financiero")
     
-    if st.button("🔐 Ir a Iniciar Sesión", use_container_width=True):
+    if st.button(" Ir a Iniciar Sesión", use_container_width=True):
         st.session_state['show_login'] = True
         st.rerun()
 
@@ -1091,7 +1135,7 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
     with col1:
         st.markdown(f"""
         <div class="metric-card" style="border-left: 5px solid #198754;">
-            <div style="font-size: 0.85rem; color: #6c757d; text-transform: uppercase;"> Ingresos</div>
+            <div style="font-size: 0.85rem; color: #6c757d; text-transform: uppercase;">💵 Ingresos</div>
             <div style="font-size: 1.3rem; font-weight: 600; color: #198754;">{formatear_moneda(total_ingresos)}</div>
             <div style="font-size: 0.75rem; color: #6c757d;">Recibido: {formatear_moneda(total_ingresos_recibidos)}</div>
         </div>
@@ -1129,7 +1173,7 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
         color_saldo = "#198754" if saldo_real >= 0 else "#dc3545"
         st.markdown(f"""
         <div class="metric-card" style="border-left: 5px solid {color_saldo};">
-            <div style="font-size: 0.85rem; color: #6c757d; text-transform: uppercase;"> Saldo Real</div>
+            <div style="font-size: 0.85rem; color: #6c757d; text-transform: uppercase;">💰 Saldo Real</div>
             <div style="font-size: 1.3rem; font-weight: 600; color: {color_saldo};">{formatear_moneda(saldo_real)}</div>
             <div style="font-size: 0.75rem; color: #6c757d;">Disponible ahora</div>
         </div>
@@ -1157,7 +1201,7 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
                 fig.update_layout(height=400)
                 st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("💡 Registra tus ingresos en '💵 Ingresos'")
+            st.info("💡 Registra tus ingresos en ' Ingresos'")
     
     with col2:
         st.subheader("📉 Presupuesto vs Real")
@@ -1188,14 +1232,14 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
     
     if metas:
         st.markdown("---")
-        st.subheader("🎯 Metas Financieras")
+        st.subheader(" Metas Financieras")
         cols = st.columns(min(len(metas), 3))
         for idx, meta in enumerate(metas[:6]):
             with cols[idx % len(cols)]:
                 progreso = (float(meta['monto_actual']) / float(meta['monto_objetivo'])) * 100 if float(meta['monto_objetivo']) > 0 else 0
                 st.markdown(f"""
                 <div class="goal-card">
-                    <div style="font-weight: 600; font-size: 1.1rem;"> {meta['nombre']}</div>
+                    <div style="font-weight: 600; font-size: 1.1rem;">🎯 {meta['nombre']}</div>
                     <div style="font-size: 0.9rem; margin: 0.5rem 0;">
                         {formatear_moneda(meta['monto_actual'])} / {formatear_moneda(meta['monto_objetivo'])}
                     </div>
@@ -1238,7 +1282,7 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
         st.markdown("#### 💸 Gastos Fijos del Mes")
         if gastos_fijos:
             for gasto in gastos_fijos:
-                estado = "✅" if gasto['pagado'] else ""
+                estado = "✅" if gasto['pagado'] else "⏳"
                 st.markdown(f"""
                 <div class="{'paid-expense' if gasto['pagado'] else 'pending-expense'}">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1260,12 +1304,12 @@ def pagina_inicio(db: DatabaseManager, mes: int, anio: int):
     render_footer()
 
 # ============================================================
-# PÁGINA: INGRESOS (CON SALDO REAL)
+# PÁGINA: INGRESOS
 # ============================================================
 def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
     st.title("💵 Gestión de Ingresos")
     
-    tab1, tab2, tab3 = st.tabs(["📋 Ingresos del Mes", "⚙️ Configurar Ingresos", "📋 Copiar a Otro Mes"])
+    tab1, tab2, tab3 = st.tabs(["📋 Ingresos del Mes", "️ Configurar Ingresos", "📋 Copiar a Otro Mes"])
     
     with tab1:
         st.subheader(f"Ingresos - {obtener_nombre_mes(mes, anio)}")
@@ -1276,7 +1320,6 @@ def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
             recibidos = sum(float(i['monto']) for i in ingresos if i['recibido'])
             pendientes = total - recibidos
             
-            # Calcular saldo REAL disponible (solo con lo recibido)
             saldo_real = calcular_saldo_real_disponible(db, mes, anio)
             saldo_proyectado = calcular_saldo_proyectado(db, mes, anio)
             
@@ -1285,7 +1328,6 @@ def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
             col2.metric("Recibidos", formatear_moneda(recibidos))
             col3.metric("Pendientes", formatear_moneda(pendientes))
             
-            # Mostrar ambos saldos claramente
             st.markdown("---")
             col_s1, col_s2 = st.columns(2)
             with col_s1:
@@ -1305,7 +1347,7 @@ def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
             for ingreso in ingresos:
                 col1, col2, col3, col4, col5 = st.columns([3, 2, 2, 2, 1])
                 with col1:
-                    estado = "✅ Recibido" if ingreso['recibido'] else "⏳ Pendiente"
+                    estado = "✅ Recibido" if ingreso['recibido'] else " Pendiente"
                     st.markdown(f"**{ingreso['icono'] or ''} {ingreso['nombre']}**")
                     st.caption(estado)
                 with col2:
@@ -1401,7 +1443,7 @@ def pagina_ingresos(db: DatabaseManager, mes: int, anio: int):
 def pagina_gastos_fijos(db: DatabaseManager, mes: int, anio: int):
     st.title("💳 Gestión de Gastos Fijos")
     
-    tab1, tab2, tab3 = st.tabs(["📝 Gastos del Mes", "️ Configurar Gastos", "📋 Copiar a Otro Mes"])
+    tab1, tab2, tab3 = st.tabs(["📝 Gastos del Mes", "⚙️ Configurar Gastos", "📋 Copiar a Otro Mes"])
     
     with tab1:
         st.subheader(f"Gastos Fijos - {obtener_nombre_mes(mes, anio)}")
@@ -1511,13 +1553,12 @@ def pagina_gastos_fijos(db: DatabaseManager, mes: int, anio: int):
     render_footer()
 
 # ============================================================
-# PÁGINA: GASTOS VARIABLES (FORMULARIO AMPLIADO)
+# PÁGINA: GASTOS VARIABLES
 # ============================================================
 def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
-    st.title(" Gestión de Gastos Variables")
+    st.title("🛒 Gestión de Gastos Variables")
     
-    # Usar tabs para separar la lista del formulario - AMBAS VISTAS AMPLIAS
-    tab1, tab2 = st.tabs(["📋 Lista de Gastos Variables", "➕ Agregar Nuevo Gasto Variable"])
+    tab1, tab2 = st.tabs([" Lista de Gastos Variables", "➕ Agregar Nuevo Gasto Variable"])
     
     with tab1:
         st.subheader(f"Gastos Variables - {obtener_nombre_mes(mes, anio)}")
@@ -1527,16 +1568,14 @@ def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
             total = sum(float(g['monto']) for g in gastos_variables)
             st.metric("Total Gastos Variables", formatear_moneda(total))
             
-            # Saldo real disponible
             saldo_real = calcular_saldo_real_disponible(db, mes, anio)
             if saldo_real >= 0:
                 st.success(f"💰 **Saldo real disponible:** {formatear_moneda(saldo_real)}")
             else:
-                st.error(f" **Déficit:** {formatear_moneda(abs(saldo_real))}")
+                st.error(f"🚨 **Déficit:** {formatear_moneda(abs(saldo_real))}")
             
             st.markdown("---")
             
-            # Mostrar gastos en tabla amplia
             for gasto in gastos_variables:
                 col1, col2, col3, col4 = st.columns([4, 2, 2, 1])
                 with col1:
@@ -1569,14 +1608,13 @@ def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
         else:
             st.info("No hay gastos variables registrados para este mes.")
             st.markdown("### 💡 ¿Cómo empezar?")
-            st.markdown("Ve a la pestaña **' Agregar Nuevo Gasto Variable'** para registrar tu primer gasto.")
+            st.markdown("Ve a la pestaña **'➕ Agregar Nuevo Gasto Variable'** para registrar tu primer gasto.")
     
     with tab2:
         st.subheader("➕ Agregar Nuevo Gasto Variable")
         st.markdown("Registra un gasto variable como alimentación, transporte, entretenimiento, etc.")
         st.markdown("---")
         
-        # Formulario en vista completa (no en columna estrecha)
         with st.form("nuevo_gasto_variable", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
@@ -1587,7 +1625,7 @@ def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
                 categorias = db.obtener_categorias('variable')
                 if categorias:
                     categoria_options = {f"{c['icono']} {c['nombre']}": c['id'] for c in categorias}
-                    categoria_nombre = st.selectbox("📂 Categoría", list(categoria_options.keys()))
+                    categoria_nombre = st.selectbox(" Categoría", list(categoria_options.keys()))
                     categoria_id = categoria_options[categoria_nombre]
                 else:
                     categoria_id = None
@@ -1611,7 +1649,7 @@ def pagina_gastos_variables(db: DatabaseManager, mes: int, anio: int):
     render_footer()
 
 # ============================================================
-# PÁGINA: PRÉSTAMOS (CORREGIDO PARA DECIMALES)
+# PÁGINA: PRÉSTAMOS
 # ============================================================
 def pagina_prestamos(db: DatabaseManager, mes: int, anio: int):
     st.title("💰 Gestión de Préstamos y Deudas")
@@ -1712,7 +1750,7 @@ def pagina_prestamos(db: DatabaseManager, mes: int, anio: int):
                 )
             with col2:
                 cuota_mensual = st.number_input(
-                    "💳 Cuota mensual (S/)", 
+                    " Cuota mensual (S/)", 
                     min_value=0.0, 
                     step=0.01, 
                     format="%.2f",
@@ -1730,11 +1768,11 @@ def pagina_prestamos(db: DatabaseManager, mes: int, anio: int):
             
             if submit:
                 if not nombre:
-                    st.error("️ Por favor ingresa el nombre del préstamo")
+                    st.error("⚠️ Por favor ingresa el nombre del préstamo")
                 elif monto_total <= 0:
-                    st.error("⚠️ El monto total debe ser mayor a 0")
+                    st.error("️ El monto total debe ser mayor a 0")
                 elif cuota_mensual <= 0:
-                    st.error("️ La cuota mensual debe ser mayor a 0")
+                    st.error("⚠️ La cuota mensual debe ser mayor a 0")
                 else:
                     try:
                         db.agregar_prestamo(
@@ -1752,7 +1790,7 @@ def pagina_prestamos(db: DatabaseManager, mes: int, anio: int):
                         st.error(f"❌ Error al agregar préstamo: {str(e)}")
         
         st.markdown("---")
-        st.info("💡 **Tip:** Los préstamos se suman automáticamente al cálculo de tus egresos mensuales.")
+        st.info(" **Tip:** Los préstamos se suman automáticamente al cálculo de tus egresos mensuales.")
     
     render_footer()
 
@@ -1790,14 +1828,14 @@ def pagina_ahorros(db: DatabaseManager, mes: int, anio: int):
                     st.markdown(f"**{formatear_moneda(ahorro['monto'])}**")
                     st.caption(f"Tipo: {ahorro['tipo']}")
                 with col3:
-                    if st.button("🗑️", key=f"del_ah_{ahorro['id']}"):
+                    if st.button("️", key=f"del_ah_{ahorro['id']}"):
                         db.eliminar_ahorro(ahorro['id'])
                         st.rerun()
         else:
             st.info("No hay ahorros registrados para este mes")
         
         st.markdown("---")
-        st.subheader("📊 Historial de Ahorros")
+        st.subheader(" Historial de Ahorros")
         hoy = datetime.now()
         datos_historial = []
         for i in range(6):
@@ -1840,7 +1878,7 @@ def pagina_ahorros(db: DatabaseManager, mes: int, anio: int):
 # PÁGINA: METAS FINANCIERAS
 # ============================================================
 def pagina_metas(db: DatabaseManager, mes: int, anio: int):
-    st.title(" Metas Financieras")
+    st.title("🎯 Metas Financieras")
     st.markdown("Define y sigue tus objetivos financieros: vacaciones, emergencia, compras, etc.")
     
     tab1, tab2 = st.tabs(["🎯 Mis Metas", "➕ Nueva Meta"])
@@ -1894,7 +1932,7 @@ def pagina_metas(db: DatabaseManager, mes: int, anio: int):
                                     st.rerun()
                     
                     with col2:
-                        if st.button("🗑️ Eliminar Meta", key=f"del_meta_{meta['id']}"):
+                        if st.button("️ Eliminar Meta", key=f"del_meta_{meta['id']}"):
                             db.eliminar_meta(meta['id'])
                             st.rerun()
         else:
@@ -1938,8 +1976,8 @@ def pagina_presupuestos(db: DatabaseManager, mes: int, anio: int):
         st.success(f"💵 **Ingresos del mes:** {formatear_moneda(total_ingresos)}")
         st.info(f"""
         💡 **Regla 50/30/20 sugerida:**
-        - 🏠 **Necesidades (50%):** {formatear_moneda(total_ingresos * 0.5)}
-        -  **Deseos (30%):** {formatear_moneda(total_ingresos * 0.3)}
+        -  **Necesidades (50%):** {formatear_moneda(total_ingresos * 0.5)}
+        - 🎯 **Deseos (30%):** {formatear_moneda(total_ingresos * 0.3)}
         - 💰 **Ahorro (20%):** {formatear_moneda(total_ingresos * 0.2)}
         """)
     else:
@@ -1953,7 +1991,7 @@ def pagina_presupuestos(db: DatabaseManager, mes: int, anio: int):
     gastos_variables = db.obtener_gastos_variables(mes, anio)
     
     if presupuestos:
-        st.markdown("###  Presupuestos Actuales")
+        st.markdown("### 📋 Presupuestos Actuales")
         for pres in presupuestos:
             gasto_real = (
                 sum(float(g['monto']) for g in gastos_fijos if g['categoria_id'] == pres['categoria_id']) +
@@ -2004,7 +2042,7 @@ def pagina_presupuestos(db: DatabaseManager, mes: int, anio: int):
 # PÁGINA: HISTORIAL
 # ============================================================
 def pagina_historial(db: DatabaseManager):
-    st.title(" Historial Financiero")
+    st.title("📅 Historial Financiero")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -2160,11 +2198,11 @@ def main():
     if not st.session_state['logged_in']:
         # Si NO hay usuarios registrados → mostrar registro
         if not hay_usuarios:
-            st.info(" ¡Bienvenido! Parece que eres el primer usuario. Por favor, crea tu cuenta.")
+            st.info("👋 ¡Bienvenido! Parece que eres el primer usuario. Por favor, crea tu cuenta.")
             registro()
         # Si YA hay usuarios registrados → mostrar login con opción de registrarse
         else:
-            # Inicializar flag si no existe - CORREGIDO: True por defecto para mostrar login
+            # Inicializar flag si no existe
             if 'show_login' not in st.session_state:
                 st.session_state['show_login'] = True
             
@@ -2203,9 +2241,9 @@ def main():
         st.markdown("---")
         st.subheader("📋 Menú")
         pagina = st.radio("Navegación",
-            ["🏠 Inicio", "💵 Ingresos", "💳 Gastos Fijos", "🛒 Gastos Variables",
+            ["🏠 Inicio", "💵 Ingresos", "💳 Gastos Fijos", " Gastos Variables",
              "💰 Préstamos", "🏦 Ahorros", "🎯 Metas", "📊 Presupuestos",
-             "📅 Historial", "⚙️ Configuración"],
+             "📅 Historial", "️ Configuración"],
             label_visibility="collapsed")
         
         st.markdown("---")
@@ -2222,13 +2260,13 @@ def main():
         pagina_gastos_variables(db, mes, anio)
     elif pagina == "💰 Préstamos":
         pagina_prestamos(db, mes, anio)
-    elif pagina == "🏦 Ahorros":
+    elif pagina == " Ahorros":
         pagina_ahorros(db, mes, anio)
-    elif pagina == " Metas":
+    elif pagina == "🎯 Metas":
         pagina_metas(db, mes, anio)
-    elif pagina == " Presupuestos":
+    elif pagina == "📊 Presupuestos":
         pagina_presupuestos(db, mes, anio)
-    elif pagina == " Historial":
+    elif pagina == "📅 Historial":
         pagina_historial(db)
     elif pagina == "⚙️ Configuración":
         pagina_configuracion(db)
