@@ -407,7 +407,7 @@ class DatabaseManager:
         response = self.client.table('ingresos').insert({
             'nombre': nombre, 'monto': float(monto), 'categoria_id': int(categoria_id),
             'fecha_pago': int(fecha_pago), 'frecuencia': frecuencia, 'activo': 1
-        }).execute()
+        }).select('id').execute()
         return response.data[0]['id'] if response.data else 0
 
     def eliminar_ingreso(self, id: int) -> bool:
@@ -515,7 +515,7 @@ class DatabaseManager:
         response = self.client.table('gastos_fijos').insert({
             'nombre': nombre, 'monto': float(monto), 'categoria_id': int(categoria_id),
             'fecha_pago': int(fecha_pago), 'frecuencia': frecuencia, 'activo': 1
-        }).execute()
+        }).select('id').execute()
         return response.data[0]['id'] if response.data else 0
 
     def eliminar_gasto_fijo(self, id: int) -> bool:
@@ -626,7 +626,7 @@ class DatabaseManager:
             'descripcion': descripcion, 'monto': float(monto),
             'categoria_id': int(categoria_id), 'fecha': fecha,
             'mes': fecha_dt.month, 'anio': fecha_dt.year
-        }).execute()
+        }).select('id').execute()
         return response.data[0]['id'] if response.data else 0
 
     def eliminar_gasto_variable(self, id: int) -> bool:
@@ -664,7 +664,7 @@ class DatabaseManager:
             'tasa_interes': float(tasa_interes), 'fecha_inicio': fecha_inicio,
             'fecha_fin': fecha_fin, 'cuota_mensual': float(cuota_mensual),
             'tipo': tipo, 'activo': 1
-        }).execute()
+        }).select('id').execute()
         return response.data[0]['id'] if response.data else 0
 
     def eliminar_prestamo(self, id: int) -> bool:
@@ -689,7 +689,7 @@ class DatabaseManager:
         response = self.client.table('pagos_prestamos').insert({
             'prestamo_id': int(prestamo_id), 'monto': float(monto),
             'fecha_pago': fecha_pago, 'mes': fecha_dt.month, 'anio': fecha_dt.year
-        }).execute()
+        }).select('id').execute()
         return response.data[0]['id'] if response.data else 0
 
     def obtener_historial_pagos_prestamo(self, prestamo_id: int) -> List[Dict]:
@@ -732,7 +732,7 @@ class DatabaseManager:
         response = self.client.table('ahorros').insert({
             'concepto': concepto, 'monto': float(monto), 'fecha': fecha,
             'mes': fecha_dt.month, 'anio': fecha_dt.year, 'tipo': tipo
-        }).execute()
+        }).select('id').execute()
         return response.data[0]['id'] if response.data else 0
 
     def eliminar_ahorro(self, id: int) -> bool:
@@ -791,7 +791,7 @@ class DatabaseManager:
             'nombre': nombre, 'monto_objetivo': float(monto_objetivo),
             'fecha_limite': fecha_limite, 'prioridad': prioridad,
             'descripcion': descripcion, 'activo': 1
-        }).execute()
+        }).select('id').execute()
         return response.data[0]['id'] if response.data else 0
 
     def agregar_aporte_meta(self, meta_id: int, monto: float, fecha: str, notas: str = '') -> int:
@@ -799,7 +799,7 @@ class DatabaseManager:
         response = self.client.table('aportes_metas').insert({
             'meta_id': int(meta_id), 'monto': float(monto), 'fecha': fecha,
             'mes': fecha_dt.month, 'anio': fecha_dt.year, 'notas': notas
-        }).execute()
+        }).select('id').execute()
         res_sum = self.client.table('aportes_metas').select('monto').eq('meta_id', int(meta_id)).execute()
         total = sum(safe_float(a['monto']) for a in (res_sum.data or []))
         self.client.table('metas_financieras').update({'monto_actual': total}).eq('id', int(meta_id)).execute()
@@ -904,7 +904,7 @@ def obtener_meses_disponibles() -> List[Tuple[int, int, str]]:
     meses = []
     for i in range(-6, 7):
         fecha = hoy + relativedelta(months=i)
-        meses.append((fecha.month, fecha.year, obtener_nombre_mes(fecha.month, fecha.year)))
+        meses.append((fecha.month, fecha.year, fecha.strftime('%B %Y')))
     return meses
 
 
@@ -994,11 +994,7 @@ def login():
         submit = st.form_submit_button("Ingresar")
         if submit:
             db = DatabaseManager()
-            try:
-                user = db.verificar_usuario(username.strip(), password)
-            except Exception as e:
-                st.error(f"No se pudo conectar para verificar el usuario: {str(e)}")
-                user = None
+            user = db.verificar_usuario(username, password)
             if user:
                 st.session_state['logged_in'] = True
                 st.session_state['user'] = user
@@ -1018,16 +1014,14 @@ def registro():
         password_confirm = st.text_input("Confirmar Contraseña", type="password")
         submit = st.form_submit_button("Registrarse")
         if submit:
-            if not username.strip() or not nombre_completo.strip():
-                st.error("Completa el nombre completo y el usuario")
-            elif password != password_confirm:
+            if password != password_confirm:
                 st.error("Las contraseñas no coinciden")
             elif len(password) < 6:
                 st.error("La contraseña debe tener al menos 6 caracteres")
             else:
                 db = DatabaseManager()
-                if db.crear_usuario(username.strip(), password, nombre_completo.strip()):
-                    st.success("¡Registro exitoso! Ahora ve a la pestaña 'Iniciar Sesión' e ingresa")
+                if db.crear_usuario(username, password, nombre_completo):
+                    st.success("¡Registro exitoso! Ahora puedes iniciar sesión")
                     st.session_state['show_login'] = True
                 else:
                     st.error("El nombre de usuario ya existe")
@@ -1651,29 +1645,13 @@ def pagina_prestamos(db: DatabaseManager, mes: int, anio: int):
                 fecha_inicio = st.date_input("Fecha de inicio", value=datetime.now())
                 tipo = st.selectbox("Tipo de préstamo",
                                     ["bancario", "personal", "tarjeta de crédito", "vehículo", "hipotecario", "otro"])
-                tiene_fecha_fin = st.checkbox("Definir fecha de fin (opcional)")
-                fecha_fin = st.date_input("Fecha de fin", value=datetime.now() + relativedelta(years=1))
             submit = st.form_submit_button("Agregar Préstamo")
             if submit:
                 if nombre and monto_total > 0:
-                    try:
-                        # CORRECCIÓN: se pasa fecha_fin en la posición correcta
-                        # (antes faltaba y cuota_mensual/tipo quedaban desplazados).
-                        fecha_fin_str = fecha_fin.isoformat() if tiene_fecha_fin else None
-                        nuevo_id = db.agregar_prestamo(
-                            nombre, float(monto_total), float(tasa_interes),
-                            fecha_inicio.isoformat(), fecha_fin_str,
-                            float(cuota_mensual), tipo
-                        )
-                        if nuevo_id:
-                            st.success("¡Préstamo agregado exitosamente!")
-                            st.rerun()
-                        else:
-                            st.error("No se pudo guardar el préstamo")
-                    except Exception as e:
-                        st.error(f"Error al guardar el préstamo: {str(e)}")
-                else:
-                    st.error("Ingresa el nombre y un monto total mayor a 0")
+                    db.agregar_prestamo(nombre, monto_total, tasa_interes,
+                                        fecha_inicio.isoformat(), cuota_mensual, tipo)
+                    st.success("¡Préstamo agregado exitosamente!")
+                    st.rerun()
     
     render_footer()
 
@@ -2028,18 +2006,31 @@ def pagina_configuracion(db: DatabaseManager):
 # ============================================================
 def main():
     db = DatabaseManager()
+    try:
+        response = db.client.table('usuarios').select('id').limit(1).execute()
+        hay_usuarios = len(response.data) > 0 if response.data else False
+    except Exception:
+        hay_usuarios = False
+    
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
-
+    
     if not st.session_state['logged_in']:
-        # Siempre se muestra primero "Iniciar Sesión"; "Crear Cuenta" queda
-        # disponible en la segunda pestaña (sirve también cuando no hay usuarios).
-        tab_login, tab_registro = st.tabs(["🔐 Iniciar Sesión", "📝 Crear Cuenta Nueva"])
-        with tab_login:
-            login()
-        with tab_registro:
+        if not hay_usuarios:
             registro()
-        render_footer()
+        else:
+            if 'show_login' not in st.session_state:
+                st.session_state['show_login'] = False
+            if st.session_state['show_login']:
+                login()
+                if st.button("¿No tienes cuenta? Regístrate"):
+                    st.session_state['show_login'] = False
+                    st.rerun()
+            else:
+                login()
+                if st.button("¿No tienes cuenta? Regístrate"):
+                    st.session_state['show_login'] = True
+                    st.rerun()
         return
     
     hoy = datetime.now()
